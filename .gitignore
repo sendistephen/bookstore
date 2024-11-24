@@ -1,0 +1,42 @@
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# logs
+logs
+
+# virtualenv
+.venv
+venv/
+ENV/
+
+# dotenv
+.env
+.env.tests
+
+# sqlite DB
+*.sqlite
+*.session.sql
+
+# editor
+.vscode/
+.idea/
+
+# Flask stuff:
+instance/
+
+# Unit test / coverage reports
+htmlcov/
+html_coverage_report/
+.tox/
+.coverage
+.coverage.*
+.coveragerc
+setup.cfg
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
