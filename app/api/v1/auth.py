@@ -159,22 +159,33 @@ def forgot_password():
 def reset_password(token):
     """Reset password with token"""
     try:
+        # Check if request has JSON content type
+        if not request.is_json:
+            current_app.logger.error(f"Invalid content type. Expected application/json, got {request.content_type}")
+            return bad_request_error('Invalid content type. Must be application/json')
+        
+        # Validate request data
         schema = PasswordResetSchema()
         errors = schema.validate(request.json)
         if errors:
+            current_app.logger.error(f"Password reset validation errors: {errors}")
             return bad_request_error(errors)
             
         new_password = request.json['new_password']
         AuthService.reset_password(token, new_password)
+        
+        # Log successful password reset
+        current_app.logger.info(f"Password reset successful for token: {token}")
         
         return jsonify({
             'message': 'Password has been reset successfully'
         }), 200
         
     except ValueError as e:
+        current_app.logger.warning(f"Password reset value error: {str(e)}")
         return bad_request_error(str(e))
     except Exception as e:
-        current_app.logger.error(f"Password reset error: {str(e)}")
+        current_app.logger.error(f"Unexpected password reset error: {str(e)}", exc_info=True)
         return internal_server_error('Error resetting password')
 
 
