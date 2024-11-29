@@ -21,12 +21,5 @@ def create_app(config_class=Config):
 
     # Initialize extensions
     init_extensions(app)
-    
-    # Ensure default roles exist
-    with app.app_context():
-        from app.services.role_service import RoleService
-        # RoleService.ensure_default_roles()
-
-    # print(f"Database URI: {app.config['SQLALCHEMY_DATABASE_URI']}")
 
     return app
