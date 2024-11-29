@@ -1,0 +1,22 @@
+{% extends "email/base.html" %}
+
+{% block title %}Verify Your Email Address{% endblock %}
+
+{% block content %}
+<p>Hi {{ user.name }},</p>
+
+<p>Welcome to Bookstore! We're excited to have you on board. To get started, please verify your email address by clicking the button below:</p>
+
+<p style="text-align: center;">
+    <a href="{{ verification_url }}" class="button">Verify Email Address</a>
+</p>
+
+<p>This verification link will expire in 24 hours. If you need a new verification link, you can request one by logging into your account.</p>
+
+<div class="help-text">
+    <p>If the button above doesn't work, copy and paste this URL into your browser:</p>
+    <p style="word-break: break-all;">{{ verification_url }}</p>
+</div>
+
+<p>Best regards,<br>The Bookstore Team</p>
+{% endblock %}

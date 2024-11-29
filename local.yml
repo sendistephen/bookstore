@@ -7,16 +7,28 @@ services:
       dockerfile: ./docker/local/flask/Dockerfile
     container_name: bookstore-api
     ports:
-      - 5001:5000
+      - 5000:5000
     environment:
       - FLASK_ENV=development
-      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:${POSTGRES_PORT}/${POSTGRES_DB}
+      - DOCKER_ENV=true
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_PORT=${POSTGRES_PORT}
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres_db:${POSTGRES_PORT}/${POSTGRES_DB}
+      - API_HOST=${API_HOST}
+      - MAIL_SERVER=${MAIL_SERVER}
+      - MAIL_PORT=${MAIL_PORT}
+      - MAIL_USE_TLS=${MAIL_USE_TLS}
+      - MAIL_USE_SSL=${MAIL_USE_SSL}
+      - MAIL_DEFAULT_SENDER=${MAIL_DEFAULT_SENDER}
     volumes:
       - .:/app
     networks:
-      - flask_network
+      - bookstore_network
     depends_on:
       - postgres_db
+      - mailhog
 
   # postgres
   postgres_db:
@@ -28,10 +40,20 @@ services:
       - POSTGRES_DB=${POSTGRES_DB}
     volumes:
       - postgres_data:/var/lib/postgresql/data/
-    networks:
-      - flask_network
     ports:
-      - '5432:5432'
+      - "${POSTGRES_PORT}:5432"
+    networks:
+      - bookstore_network
+
+  # mailhog
+  mailhog:
+    image: jcalonso/mailhog:latest  # ARM64 compatible image
+    container_name: bookstore-mailhog
+    ports:
+      - "8025:8025"  # Web UI
+      - "1025:1025"  # SMTP server
+    networks:
+      - bookstore_network
 
   # nginx
   nginx:
@@ -47,11 +69,12 @@ services:
     depends_on:
       - api
     networks:
-      - flask_network
+      - bookstore_network
+
+networks:
+  bookstore_network:
+    driver: bridge
 
 volumes:
   postgres_data:
   media_volume:
-
-networks:
-  flask_network:
