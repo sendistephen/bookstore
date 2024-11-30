@@ -8,8 +8,6 @@ db: SQLAlchemy = SQLAlchemy()
 migrate: Migrate = Migrate()
 ma = Marshmallow()
 
-# TODO: initalize caching here..
-
 def init_extensions(app):
     db.init_app(app)
     migrate.init_app(app, db)

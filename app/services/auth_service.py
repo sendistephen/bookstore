@@ -84,7 +84,7 @@ class AuthService:
             raise ValueError('Your account has been deactivated')
             
         # Generate access token
-        access_token = AuthService.generate_token(user)
+        access_token = AuthService.generate_access_token(user)
         
         return {
             'access_token': access_token,
@@ -98,33 +98,125 @@ class AuthService:
         }
 
     @staticmethod
-    def generate_token(user):
+    def generate_token(user, token_type='access', expiration=None):
         """
         Generate JWT token for user
+        
+        Args:
+            user (User): User object
+            token_type (str): Type of token (access or refresh)
+            expiration (int, optional): Token expiration time in minutes
+        
+        Returns:
+            str: JWT token
         """
-        payload = {
-            'user_id': user.id,
-            'exp': datetime.utcnow() + current_app.config['JWT_ACCESS_TOKEN_EXPIRES'],
-            'iat': datetime.utcnow(),
-            'roles': [role.name for role in user.roles]
-        }
-        return jwt.encode(
-            payload,
-            current_app.config['JWT_SECRET_KEY'],
-            algorithm='HS256'
-        )
+        try:
+            # Default expiration times
+            if expiration is None:
+                expiration = {
+                    'access': 30,    # 30 minutes for access token
+                    'refresh': 60 * 24 * 7  # 7 days for refresh token
+                }.get(token_type, 30)
+            
+            # Payload data
+            payload = {
+                'user_id': user.id,
+                'email': user.email,
+                'roles': [role.name for role in user.roles],
+                'token_type': token_type,
+                'exp': datetime.utcnow() + timedelta(minutes=expiration),
+                'iat': datetime.utcnow()
+            }
+            
+            # Use different secrets for different token types
+            secret_key = {
+                'access': current_app.config.get('SECRET_KEY'),
+                'refresh': current_app.config.get('JWT_SECRET_KEY')
+            }.get(token_type, current_app.config.get('SECRET_KEY'))
+            
+            # Generate token
+            token = jwt.encode(payload, secret_key, algorithm='HS256')
+            return token
+        
+        except Exception as e:
+            current_app.logging.error(f"Token generation error: {str(e)}")
+            raise ValueError("Failed to generate authentication token")
+
+    @staticmethod
+    def generate_access_token(user):
+        """
+        Generate access token
+        
+        Args:
+            user (User): User object
+        
+        Returns:
+            str: Access token
+        """
+        return AuthService.generate_token(user, token_type='access')
+
+    @staticmethod
+    def generate_refresh_token(user):
+        """
+        Generate refresh token
+        
+        Args:
+            user (User): User object
+        
+        Returns:
+            str: Refresh token
+        """
+        return AuthService.generate_token(user, token_type='refresh')
+
+    @staticmethod
+    def validate_token(token, token_type='access'):
+        """
+        Validate JWT token
+        
+        Args:
+            token (str): JWT token
+            token_type (str): Type of token to validate
+        
+        Returns:
+            dict: Decoded token payload
+        """
+        try:
+            # Select appropriate secret key based on token type
+            secret_key = {
+                'access': current_app.config.get('SECRET_KEY'),
+                'refresh': current_app.config.get('JWT_SECRET_KEY')
+            }.get(token_type, current_app.config.get('SECRET_KEY'))
+            
+            # Decode and validate token
+            payload = jwt.decode(token, secret_key, algorithms=['HS256'])
+            
+            # Additional token type validation
+            if payload.get('token_type') != token_type:
+                raise jwt.InvalidTokenError("Invalid token type")
+            
+            return payload
+        
+        except jwt.ExpiredSignatureError:
+            raise ValueError("Token has expired")
+        except jwt.InvalidTokenError as e:
+            raise ValueError(f"Invalid token: {str(e)}")
+        except Exception as e:
+            current_app.logger.error(f"Token validation error: {str(e)}")
+            raise ValueError("Token validation failed")
 
     @staticmethod
     def verify_token(token):
         """
         Verify JWT token and return user
+        
+        Args:
+            token (str): JWT token
+        
+        Returns:
+            User: User object
         """
         try:
-            payload = jwt.decode(
-                token,
-                current_app.config['JWT_SECRET_KEY'],
-                algorithms=['HS256']
-            )
+            payload = AuthService.validate_token(token)
             user = User.query.get(payload['user_id'])
             if not user:
                 raise ValueError('User not found')
@@ -138,6 +230,12 @@ class AuthService:
     def verify_email(token):
         """
         Verify user's email with token
+        
+        Args:
+            token (str): Verification token
+        
+        Returns:
+            User: User object
         """
         try:
             # Find user with this verification token
@@ -158,6 +256,12 @@ class AuthService:
     def initiate_password_reset(email):
         """
         Generate password reset token and send email
+
+        Args:
+            email (str): User's email
+
+        Returns:
+            bool: True if email sent successfully
         """
         user = User.query.filter_by(email=email).first()
         if not user:
@@ -178,6 +282,13 @@ class AuthService:
     def reset_password(token, new_password):
         """
         Reset user's password using reset token
+
+        Args:
+            token (str): Reset token
+            new_password (str): New password
+
+        Returns:
+            bool: True if password reset successful
         """
         user = User.query.filter_by(reset_token=token).first()
         if not user or not user.verify_reset_token(token):
@@ -197,6 +308,14 @@ class AuthService:
     def change_password(user_id, current_password, new_password):
         """
         Change user's password
+
+        Args:
+            user_id (int): User's ID
+            current_password (str): Current password
+            new_password (str): New password
+
+        Returns:
+            bool: True if password changed successfully
         """
         user = User.query.get(user_id)
         if not user:
@@ -214,7 +333,14 @@ class AuthService:
 
     @staticmethod
     def delete_user_by_email(email):
-        """Delete a user by email"""
+        """Delete a user by email"
+        
+        Args:
+            email (str): User's email
+        
+        Returns:
+            bool: True if user deleted successfully
+        """
         try:
             user = User.query.filter(
                 db.func.lower(User.email) == db.func.lower(email)

@@ -6,6 +6,7 @@ import re
 from utils.error_handler import bad_request_error
 from app.extensions import db
 import secrets
+from app.models.role import Role
 
 # Association table for user roles
 user_roles = db.Table(
@@ -129,3 +130,48 @@ class User(db.Model):
                 self.reset_token_expires < datetime.utcnow()):
             return False
         return True
+
+    @classmethod
+    def create_or_link_google_user(cls, email, name, google_id, picture=None):
+        """
+        Create or link Google user
+        
+        Args:
+            email (str): User's email
+            name (str): User's name
+            google_id (str): Google user ID
+            picture (str, optional): User's profile picture URL. Defaults to None.
+
+        Returns:
+            User: Created or existing user
+        """
+        existing_user = cls.query.filter_by(email=email).first()
+        
+        # Get default customer role
+        customer_role = Role.query.filter_by(name="customer").first()
+        if not customer_role:
+            # create customer role if not exists
+            customer_role = Role(name="customer", description="Default customer role")
+            db.session.add(customer_role)
+            db.session.commit()
+        
+        if existing_user:
+            # Link Google account if not already linked
+            if not existing_user.google_id:
+                existing_user.google_id = google_id
+                existing_user.google_profile_pic = picture
+                
+                # Add customer role if not already assigned
+                if customer_role not in existing_user.roles:
+                    existing_user.roles.append(customer_role)
+                    
+                db.session.commit()
+            return existing_user
+        
+        # Create new user
+        new_user = cls(email=email, name=name, google_id=google_id, google_profile_pic=picture, is_verified=True)
+        new_user.roles.append(customer_role)
+        
+        db.session.add(new_user)
+        db.session.commit()
+        return new_user

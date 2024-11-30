@@ -10,7 +10,7 @@ load_dotenv()
 class Config:
     """Base configuration for the application."""
 
-    # flask settings
+    # Flask settings
     SECRET_KEY: str = os.environ.get("SECRET_KEY") or secrets.token_hex(32)
 
     # Database settings
@@ -49,14 +49,23 @@ class Config:
 
     # Email verification settings
     VERIFY_EMAIL_TOKEN_EXPIRY: timedelta = timedelta(hours=24)
-    RESET_PASSWORD_TOKEN_EXPIRY: timedelta = timedelta(hours=1)
 
-    # Frontend URLs
-    FRONTEND_URL: str = os.environ.get("FRONTEND_URL", "http://localhost:3000")
-    CONTACT_URL: str = os.environ.get("CONTACT_URL", f"{FRONTEND_URL}/contact")
+    # Redis and Session settings
+    REDIS_HOST: str = os.environ.get('REDIS_HOST', 'redis')
+    REDIS_PORT: int = int(os.environ.get('REDIS_PORT', 6379))
+    REDIS_DB: int = int(os.environ.get('REDIS_DB', 0))
+    REDIS_URL: str = os.environ.get('REDIS_URL', f'redis://{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}')
     
-    # Template directories
-    TEMPLATE_DIR: str = os.path.join(os.path.dirname(os.path.dirname(__file__)), "app", "templates")
+    # Session configuration
+    SESSION_TYPE: str = 'redis'
+    SESSION_PERMANENT: bool = True
+    PERMANENT_SESSION_LIFETIME: timedelta = timedelta(minutes=30)
+    SESSION_USE_SIGNER: bool = True
+    SESSION_KEY_PREFIX: str = 'bookstore:'
+    SESSION_COOKIE_SECURE: bool = False  # Set to True in production
+    SESSION_COOKIE_HTTPONLY: bool = True
+    SESSION_COOKIE_SAMESITE: str = 'Lax'
+    SESSION_REFRESH_EACH_REQUEST: bool = True
 
 
 class DevelopmentConfig(Config):
@@ -64,8 +73,8 @@ class DevelopmentConfig(Config):
     DEBUG: bool = True
     DEVELOPMENT: bool = True
     MAIL_DEBUG: bool = True
-    
-    
+
+
 class ProductionConfig(Config):
     """Production configuration for the application."""
     DEBUG: bool = False
@@ -76,6 +85,7 @@ class ProductionConfig(Config):
     MAIL_USERNAME: str = os.environ.get("MAIL_USERNAME")
     MAIL_PASSWORD: str = os.environ.get("MAIL_PASSWORD")
     CONTACT_URL: str = os.environ.get("CONTACT_URL", "https://bookstore.com/contact")
+    SESSION_COOKIE_SECURE: bool = True  # Force HTTPS in production
 
 
 class TestingConfig(Config):
@@ -84,6 +94,7 @@ class TestingConfig(Config):
     SQLALCHEMY_DATABASE_URI: str = "sqlite:///memory.db"
     MAIL_SUPPRESS_SEND: bool = True
     WTF_CSRF_ENABLED: bool = False
+    SESSION_TYPE: str = 'filesystem'  # Use filesystem sessions in testing
 
 
 config: Dict[str, Type[Config]] = {

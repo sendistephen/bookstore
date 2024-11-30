@@ -1,4 +1,3 @@
-
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
@@ -40,3 +39,6 @@ nosetests.xml
 coverage.xml
 *.cover
 .hypothesis/
+
+# Google OAuth Client Secret
+client_secret.json
