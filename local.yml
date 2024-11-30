@@ -11,24 +11,57 @@ services:
     environment:
       - FLASK_ENV=development
       - DOCKER_ENV=true
+
+      # Database configuration
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - POSTGRES_DB=${POSTGRES_DB}
       - POSTGRES_PORT=${POSTGRES_PORT}
       - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres_db:${POSTGRES_PORT}/${POSTGRES_DB}
+     
+      # Application configuration
       - API_HOST=${API_HOST}
+    
+      # Mail configuration
       - MAIL_SERVER=${MAIL_SERVER}
       - MAIL_PORT=${MAIL_PORT}
       - MAIL_USE_TLS=${MAIL_USE_TLS}
       - MAIL_USE_SSL=${MAIL_USE_SSL}
       - MAIL_DEFAULT_SENDER=${MAIL_DEFAULT_SENDER}
+
+      # Google OAuth configuration
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+      - GOOGLE_REDIRECT_URI=${GOOGLE_REDIRECT_URI}
+
+      # Redis configuration
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_DB=0
+      - REDIS_URL=redis://redis:6379/0
+      - SESSION_TYPE=redis
+
     volumes:
       - .:/app
+      - ./client_secret.json:/app/client_secret.json
     networks:
       - bookstore_network
     depends_on:
       - postgres_db
       - mailhog
+      - redis
+
+  # Redis
+  redis:
+    image: redis:6.2-alpine
+    container_name: bookstore-redis
+    command: redis-server --appendonly yes
+    ports:
+      - "${REDIS_PORT}:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - bookstore_network
 
   # postgres
   postgres_db:
@@ -47,11 +80,11 @@ services:
 
   # mailhog
   mailhog:
-    image: jcalonso/mailhog:latest  # ARM64 compatible image
+    image: jcalonso/mailhog:latest
     container_name: bookstore-mailhog
     ports:
-      - "8025:8025"  # Web UI
-      - "1025:1025"  # SMTP server
+      - "8025:8025"
+      - "1025:1025"
     networks:
       - bookstore_network
 
@@ -78,3 +111,4 @@ networks:
 volumes:
   postgres_data:
   media_volume:
+  redis_data:

@@ -32,6 +32,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application code and change ownership
 COPY --chown=flask:flask . ${APP_HOME}
 
+# Prepare client secret with secure permissions
+COPY --chown=flask:flask  client_secret.json ${APP_HOME}/client_secret.json
+RUN chmod 600 ${APP_HOME}/client_secret.json
+
 # Switch to the non root user
 USER flask
 
