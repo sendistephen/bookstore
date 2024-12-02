@@ -132,7 +132,7 @@ class User(db.Model):
         return True
 
     @classmethod
-    def create_or_link_google_user(cls, email, name, google_id, picture=None):
+    def create_or_link_google_user(cls, email, name, google_id, picture=None, google_token=None):
         """
         Create or link Google user
         
@@ -141,6 +141,7 @@ class User(db.Model):
             name (str): User's name
             google_id (str): Google user ID
             picture (str, optional): User's profile picture URL. Defaults to None.
+            google_token (str, optional): Google OAuth token. Defaults to None.
 
         Returns:
             User: Created or existing user
@@ -156,20 +157,29 @@ class User(db.Model):
             db.session.commit()
         
         if existing_user:
-            # Link Google account if not already linked
-            if not existing_user.google_id:
-                existing_user.google_id = google_id
-                existing_user.google_profile_pic = picture
+            # Update Google-related fields on every login
+            existing_user.google_id = google_id
+            existing_user.google_profile_pic = picture
+            existing_user.google_token = google_token
+            existing_user.is_google_authenticated = True
+            
+            # Add customer role if not already assigned
+            if customer_role not in existing_user.roles:
+                existing_user.roles.append(customer_role)
                 
-                # Add customer role if not already assigned
-                if customer_role not in existing_user.roles:
-                    existing_user.roles.append(customer_role)
-                    
-                db.session.commit()
+            db.session.commit()
             return existing_user
         
         # Create new user
-        new_user = cls(email=email, name=name, google_id=google_id, google_profile_pic=picture, is_verified=True)
+        new_user = cls(
+            email=email,
+            name=name,
+            google_id=google_id,
+            google_profile_pic=picture,
+            google_token=google_token,
+            is_verified=True,
+            is_google_authenticated=True
+        )
         new_user.roles.append(customer_role)
         
         db.session.add(new_user)

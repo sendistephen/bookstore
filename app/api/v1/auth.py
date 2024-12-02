@@ -337,7 +337,8 @@ def google_callback():
                 email=user_info['email'],
                 name=user_info['name'],
                 google_id=user_info['google_id'],
-                picture=user_info.get('picture')
+                picture=user_info.get('picture'),
+                google_token=credentials.token
             )
             current_app.logger.info(f"User processed: {user.email}")
         except Exception as user_creation_error:
