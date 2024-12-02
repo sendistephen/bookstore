@@ -74,7 +74,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data/
     ports:
-      - "${POSTGRES_PORT}:5432"
+      - "6432:5432"
     networks:
       - bookstore_network
 
