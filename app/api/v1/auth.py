@@ -14,7 +14,7 @@ from app.services.email_service import (
     send_password_changed_email
 )
 from app.services.google_auth_service import GoogleAuthService
-from utils.error_handler import bad_request_error, internal_server_error
+from utils.error_handler import bad_request_error, internal_server_error, unauthorized_error
 from functools import wraps
 from app.models.user import User
 import logging
@@ -42,6 +42,42 @@ def token_required(f):
         except ValueError as e:
             return bad_request_error(str(e))
             
+    return decorated
+
+
+def admin_required(f):
+    """
+    Decorator to restrict access to admin users only
+    
+    Args:
+        f (function): The view function to be decorated
+    
+    Returns:
+        function: Wrapped function with admin role check
+    
+    Raises:
+        Unauthorized error if user is not an admin
+    """
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        # Get the current user from the first argument (passed by token_required)
+        current_user = args[0] if args else kwargs.get('current_user')
+        
+        # Check if current_user exists
+        if not current_user:
+            current_app.logger.warning("No user found in admin_required decorator")
+            return unauthorized_error("Authentication required")
+        
+        # Check if user has admin role
+        is_admin = any(role.name.lower() == 'admin' for role in current_user.roles)
+        
+        if not is_admin:
+            current_app.logger.warning(f"Non-admin user {current_user.email} attempted admin access")
+            return unauthorized_error("Admin access required")
+        
+        # If user is an admin, proceed with the original function
+        return f(*args, **kwargs)
+    
     return decorated
 
 
@@ -231,7 +267,8 @@ def change_password(current_user):
 
 
 @bp.route('/auth/cleanup', methods=['POST'])
-def cleanup_user():
+@admin_required
+def cleanup_user(current_user):
     """Cleanup user by email"""
     try:
         data = request.get_json()

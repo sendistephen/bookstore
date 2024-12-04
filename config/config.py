@@ -73,6 +73,8 @@ class DevelopmentConfig(Config):
     DEBUG: bool = True
     DEVELOPMENT: bool = True
     MAIL_DEBUG: bool = True
+    
+    SQL_ALCHEMY_ECHO: bool = True
 
 
 class ProductionConfig(Config):

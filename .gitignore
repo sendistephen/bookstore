@@ -42,3 +42,6 @@ coverage.xml
 
 # Google OAuth Client Secret
 client_secret.json
+
+# Admin credentials
+.admin_credentials

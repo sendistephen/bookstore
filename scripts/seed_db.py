@@ -13,7 +13,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 # Define function to get database URL
 def get_database_url():
     """Get the database URL based on environment."""
-    return os.environ.get("DATABASE_URL") or "postgresql://postgres:password@localhost:5432/bookstore"
+    return os.environ.get("DATABASE_URL")
 
 # Create engine
 engine = create_engine(get_database_url())

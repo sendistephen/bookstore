@@ -30,7 +30,7 @@ def create_app(config_class=Config):
     # Initialize Flask-Session before other extensions
     Session(app)
     
-    # Initialize extensions
+    # Initialize all extensions
     init_extensions(app)
     
     # Register blueprints

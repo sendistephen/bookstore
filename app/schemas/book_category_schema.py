@@ -7,26 +7,25 @@ class BookCategorySchema(Schema):
     """Schema for book category"""
     id = fields.Str(dump_only=True) 
     name = fields.Str(required=True, validate=[
-        validate.Length(min=2, max=32,error="Name must be between 2 and 32 characters"),
+        validate.Length(min=2, max=50, error="Name must be between 2 and 50 characters"),
         validate.Regexp(
-            regex=r"^[A-Za-z  ]+$",
+            regex=r"^[A-Za-z ]+$",
             error="Name must contain only letters and spaces"
         )
     ])
-    description = fields.Str(required=False, allow_none=True, validate=validate.Length(
-        min=2,
-        max=100,
-        error="Description must be between 2 and 100 characters"
-    ))
+    description = fields.Str(required=False, allow_none=True, validate=[
+        validate.Length(
+            min=2,
+            max=100,
+            error="Description must be between 2 and 100 characters"
+        )
+    ])
     book_count = fields.Int(dump_only=True)
     created_at = fields.DateTime(dump_only=True)
     updated_at = fields.DateTime(dump_only=True)
     
-    @validates_schema
-    def validate_name(self, data, **kwargs):
+    @validates('name')
+    def validate_name(self, name):
         """Validate that category name is unique"""
-        name = data.get('name')
-        if name and  BookCategory.query.filter_by(name=name).first():
+        if BookCategory.query.filter_by(name=name).first():
             raise ValidationError('Book category already exists')
-        
-    #
