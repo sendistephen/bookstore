@@ -36,6 +36,10 @@ COPY --chown=flask:flask . ${APP_HOME}
 COPY --chown=flask:flask  client_secret.json ${APP_HOME}/client_secret.json
 RUN chmod 600 ${APP_HOME}/client_secret.json
 
+# Prepare admin credentials with secure permissions
+COPY --chown=flask:flask .admin_credentials ${APP_HOME}/.admin_credentials
+RUN chmod 600 ${APP_HOME}/.admin_credentials
+
 # Switch to the non root user
 USER flask
 
@@ -43,4 +47,4 @@ USER flask
 EXPOSE 5000
 
 # Run the flask app
-CMD ["python", "run.py", "--host=0.0.0.0"]
+CMD ["python", "run.py", "runserver", "--host=0.0.0.0"]

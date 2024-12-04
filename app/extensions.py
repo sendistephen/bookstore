@@ -9,7 +9,21 @@ migrate: Migrate = Migrate()
 ma = Marshmallow()
 
 def init_extensions(app):
+    """
+    Intialize all extensions for the Flask application
+    
+    Args:
+        app (Flask): The Flask application instance
+    """
+    
+    # Initialize SQLAlchemy
     db.init_app(app)
-    migrate.init_app(app, db)
+    
+    # Initialize Marshmallow
     ma.init_app(app)
+    
+    # Initialize Flask-Migrate
+    migrate.init_app(app, db)
+    
+    # Initialize Mail
     mail.init_app(app)

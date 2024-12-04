@@ -6,9 +6,13 @@ class BookCategory(db.Model):
     """Book category model for storing book categories"""
     
     __tablename__ = 'book_categories'
-    id = db.Column(db.String(32), unique=True, primary_key=True, default=lambda:str(uuid.uuid4()))
-    name = db.Column(db.String(32), nullable=False)
-    description = db.Column(db.String(255), nullable=True)
+    
+    # Use a longer UUID string
+    id = db.Column(db.String(36), unique=True, primary_key=True, default=lambda: str(uuid.uuid4()))
+    
+    # Ensure name is unique
+    name = db.Column(db.String(50), nullable=False, unique=True)
+    description = db.Column(db.String(100), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
@@ -18,8 +22,6 @@ class BookCategory(db.Model):
             'id': self.id,
             'name': self.name,
             'description': self.description,
-            'created_at': self.created_at,
-            'updated_at': self.updated_at
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None
         }
-    
-    

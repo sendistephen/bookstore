@@ -5,3 +5,7 @@ npm-debug.log*
 node_modules
 .env
 .npm
+__pycache__
+*.pyc
+*.pyo
+.vscode
