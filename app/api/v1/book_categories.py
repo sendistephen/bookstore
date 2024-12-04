@@ -87,3 +87,70 @@ def create_book_category(current_user):
 
         # Return a generic error response
         return error_response(500, str(e))
+
+@bp.route('/book-categories/<category_id>', methods=['PUT'])
+@token_required
+@admin_required
+def update_book_category(current_user, category_id):
+    """
+    Update an existing book category
+    
+    Args:
+        current_user (User): The currently authenticated user
+        category_id (str): The ID of the category to update
+    
+    Returns:
+        JSON response with the updated book category
+    """
+    try:
+        # Extract category data from the request payload
+        data = request.get_json(silent=True)
+        
+        # Validate that data is not None
+        if data is None:
+            return jsonify({
+                'status': 'error',
+                'message': 'Invalid JSON or empty request body'
+            }), 400
+
+        # Create a schema instance for validation
+        schema = BookCategorySchema(context={'category_id': category_id})
+        
+        # Validate the input data against the schema
+        try:
+            validated_data = schema.load(data)
+        except ValidationError as e:
+            return jsonify({
+                'status': 'error',
+                'message': 'Validation failed',
+                'errors': e.messages
+            }), 400
+        
+        # Perform the update
+        updated_category = BookCategoryService.replace_book_category(
+            category_id,
+            validated_data
+        )
+        
+        # Return the updated category
+        return jsonify({
+            'status': 'success',
+            'message': 'Book category updated successfully',
+            'data': updated_category.to_dict()
+        }), 200
+
+    except ValueError as ve:
+        return jsonify({
+            'status': 'error',
+            'message': str(ve)
+        }), 404
+
+    except Exception as e:
+        # Log the full traceback for server-side tracking
+        current_app.logger.error(f"Unexpected error updating book category", exc_info=True)
+
+        # Return a generic error response
+        return jsonify({
+            'status': 'error',
+            'message': 'An unexpected error occurred while processing the request'
+        }), 500
