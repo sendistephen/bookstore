@@ -30,7 +30,7 @@ class Config:
 
     # JWT settings
     JWT_SECRET_KEY: str = os.environ.get("JWT_SECRET_KEY") or secrets.token_hex(32)
-    JWT_ACCESS_TOKEN_EXPIRES: timedelta = timedelta(days=1)
+    JWT_ACCESS_TOKEN_EXPIRES: timedelta = timedelta(days=30)
     JWT_REFRESH_TOKEN_EXPIRES: timedelta = timedelta(days=7)
 
     # CORS settings

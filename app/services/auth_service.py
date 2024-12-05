@@ -111,12 +111,14 @@ class AuthService:
             str: JWT token
         """
         try:
-            # Default expiration times
+            # Use configuration-based expiration if not specified
             if expiration is None:
-                expiration = {
-                    'access': 30,    # 30 minutes for access token
-                    'refresh': 60 * 24 * 7  # 7 days for refresh token
-                }.get(token_type, 30)
+                if token_type == 'access':
+                    expiration = int(current_app.config.get('JWT_ACCESS_TOKEN_EXPIRES', timedelta(days=30)).total_seconds() / 60)
+                elif token_type == 'refresh':
+                    expiration = int(current_app.config.get('JWT_REFRESH_TOKEN_EXPIRES', timedelta(days=7)).total_seconds() / 60)
+                else:
+                    expiration = 30  # default fallback
             
             # Payload data
             payload = {
@@ -129,18 +131,22 @@ class AuthService:
             }
             
             # Use different secrets for different token types
-            secret_key = {
-                'access': current_app.config.get('SECRET_KEY'),
-                'refresh': current_app.config.get('JWT_SECRET_KEY')
-            }.get(token_type, current_app.config.get('SECRET_KEY'))
+            secret_key = current_app.config.get(
+                'JWT_SECRET_KEY' if token_type == 'refresh' else 'SECRET_KEY'
+            )
             
-            # Generate token
-            token = jwt.encode(payload, secret_key, algorithm='HS256')
+            # Generate the token
+            token = jwt.encode(
+                payload, 
+                secret_key, 
+                algorithm='HS256'
+            )
+            
             return token
         
         except Exception as e:
-            current_app.logging.error(f"Token generation error: {str(e)}")
-            raise ValueError("Failed to generate authentication token")
+            current_app.logger.error(f"Error generating token: {str(e)}")
+            raise
 
     @staticmethod
     def generate_access_token(user):

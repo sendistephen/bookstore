@@ -5,84 +5,80 @@ from app.extensions import db
 from datetime import datetime
 
 class BookCategoryService:
-    """Book category service"""
-    
+    """
+    Service class for managing book categories.
+    Handles database operations and business logic for book categories.
+    """
+
     @staticmethod
     def get_all_book_categories():
         """
-        Get all book categories
-
+        Retrieve all book categories from the database.
+        
         Returns:
-            List[BookCategory]: List of book categories
+            List[BookCategory]: List of all book categories
         
         Raises:
-            Exception: If there's an error fetching book categories
+            Exception: Database query error
         """
         try:
-            # Fetch all categories, ordered by name
-            categories = BookCategory.query.order_by(BookCategory.name).all()
-            
-            # If no categories exist, return an empty list
-            if not categories:
-                current_app.logger.info("No book categories found")
-            
-            return categories
-        
+            return BookCategory.query.all()
         except Exception as e:
-            # Log the specific error for debugging
-            current_app.logger.error(f"Error fetching book categories: {str(e)}")
-            
-            # Re-raise the exception to be handled by the caller
+            current_app.logger.error(f"Database error: {str(e)}")
             raise
-    
+
     @staticmethod
-    def create_book_category(name:str, description:str=None):
-        """ Create a new book category """
+    def create_book_category(name: str, description: str = None):
+        """
+        Create a new book category in the database.
+        
+        Args:
+            name: Category name, must be unique
+            description: Optional category description
+        
+        Returns:
+            BookCategory: Newly created category
+        
+        Raises:
+            ValueError: If category with name already exists
+            Exception: Database error
+        """
         try:
-            # normalize payload
-            name = name.strip()
-            description = description.strip() if description else None
-            
-            # check if category already exists
-            existing_category = BookCategory.query.filter_by(name=name).first()
-            
+            # Check if category with same name exists
+            existing_category = BookCategory.query.filter_by(name=name.strip()).first()
             if existing_category:
-                raise ValueError(f'Category "{name}" already exists')
+                raise ValueError(f"Category with name '{name}' already exists")
+
+            # Create new category
+            new_category = BookCategory(
+                name=name.strip(),
+                description=description.strip() if description else None
+            )
             
-            # Create a new category
-            new_category = BookCategory(name=name, description=description)
-            
-            # Add and commit the new category
             db.session.add(new_category)
             db.session.commit()
             
             return new_category
-        
+            
         except Exception as e:
-            # Rollback the transaction in case of an error
             db.session.rollback()
-            
-            # Log the specific error for debugging
-            current_app.logger.error(f"Error creating book category: {str(e)}")
-            
-            
-            # Re-raise the exception to be handled by the caller
             raise
-    
+
     @staticmethod
-    def update_book_category(category_id:str, update_data:dict):
+    def update_book_category(category_id: str, update_data: dict):
         """
-        Update an existing book category
+        Update an existing book category.
         
         Args:
-            category_id (str): ID of the category to update
-            update_data (dict): Dictionary containing update information
+            category_id: ID of category to update
+            update_data: Dictionary containing update information
         
         Returns:
-            BookCategory: Updated book category
+            BookCategory: Updated category
         
         Raises:
-            ValueError: If category not found or update fails
+            ValueError: Category not found or update fails
+            Exception: Database error
         """
         try:
             # Log the received update data
@@ -136,64 +132,78 @@ class BookCategoryService:
             
             # Re-raise the exception to be handled by the caller
             raise
-    
+
     @staticmethod
-    def replace_book_category(category_id:str, replacement_data:dict):
+    def replace_book_category(category_id: str, replacement_data: dict):
         """
-        Replace an existing book category with new data
+        Replace all fields of an existing book category.
         
         Args:
-            category_id (str): ID of the category to replace
-            replacement_data (dict): Dictionary containing replacement information
+            category_id: ID of category to replace
+            replacement_data: New category data containing name and description
         
         Returns:
-            BookCategory: Replaced book category
+            BookCategory: Updated category
         
         Raises:
-            ValueError: If category not found or replacement fails
+            ValueError: Category not found or name already exists
+            Exception: Database error
         """
         try:
-            # Log the received replacement data
-            current_app.logger.info(f"Replacing category {category_id} with data: {replacement_data}")
-            
             # Check if category exists
             existing_category = BookCategory.query.filter_by(id=category_id).first()
-            
             if not existing_category:
                 raise ValueError(f'Category with ID "{category_id}" not found')
             
-            # Check if the new name already exists for another category
+            # Check if new name already exists
             new_name = replacement_data.get('name', '').strip()
             if new_name:
-                existing_name = BookCategory.query.filter(
-                    BookCategory.name == new_name, 
+                name_exists = BookCategory.query.filter(
+                    BookCategory.name == new_name,
                     BookCategory.id != category_id
                 ).first()
                 
-                if existing_name:
-                    # If the name already exists for another category, raise an error
+                if name_exists:
                     raise ValueError(f"Category with name '{new_name}' already exists")
             
-            # Replace the category data
+            # Update category data
             existing_category.name = new_name
             existing_category.description = replacement_data.get('description', '').strip() or None
-            
-            # Update timestamps
             existing_category.updated_at = datetime.utcnow()
             
-            # Commit the changes
             db.session.commit()
-            
-            current_app.logger.info(f"Successfully replaced category {category_id}")
-            
             return existing_category
-        
+            
         except Exception as e:
-            # Log the specific error for debugging
-            current_app.logger.error(f"Error replacing book category: {str(e)}")
-            
-            # Rollback the transaction in case of an error
             db.session.rollback()
+            raise
+
+    @staticmethod
+    def delete_book_category(category_id: str):
+        """
+        Delete a book category from the database.
+        
+        Args:
+            category_id: ID of category to delete
+        
+        Returns:
+            bool: True if deletion successful
+        
+        Raises:
+            ValueError: Category not found
+            Exception: Database error
+        """
+        try:
+            # Check if category exists
+            category = BookCategory.query.filter_by(id=category_id).first()
+            if not category:
+                raise ValueError(f'Category with ID "{category_id}" not found')
+            #TODO: if a category has books dont delete raise an error
             
-            # Re-raise the exception to be handled by the caller
+            db.session.delete(category)
+            db.session.commit()
+            return True
+            
+        except Exception as e:
+            db.session.rollback()
             raise

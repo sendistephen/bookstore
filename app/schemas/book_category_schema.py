@@ -5,7 +5,17 @@ from utils.error_handler import bad_request_error
 import logging
 
 class BookCategorySchema(Schema):
-    """Schema for book category"""
+    """
+    Schema for validating and serializing book category data.
+    
+    Fields:
+        id: Unique identifier (read-only)
+        name: Category name (2-50 chars, alphanumeric with spaces/hyphens/underscores)
+        description: Optional category description (2-100 chars)
+        book_count: Number of books in category (read-only)
+        created_at: Creation timestamp (read-only)
+        updated_at: Last update timestamp (read-only)
+    """
     id = fields.Str(dump_only=True) 
     name = fields.Str(required=False, validate=[
         validate.Length(min=2, max=50, error="Name must be between 2 and 50 characters"),
