@@ -85,8 +85,31 @@ class BookService:
 
     @staticmethod
     def get_book_by_id(book_id):
-        """Get book by ID"""
-        pass
+        """Get book by ID
+        
+        Args:
+            book_id (str): Book ID
+        
+        Returns:
+            tuple: (book_data, error)
+            book_data (dict): Book data if found
+            error (str): Error message if book not found
+        """
+        try:
+            book = Book.query.get(book_id)
+            
+            # check if book exists
+            if not book:
+                return None, f"Book with ID {book_id} not found"
+            
+            # Serialize the book data
+            book_schema = BookSchema()
+            serialized_book = book_schema.dump(book)
+            return serialized_book, None
+        
+        except Exception as e:
+            current_app.logger.error(f"Error fetching book: {str(e)}")
+            return None, str(e)
 
     @staticmethod
     def check_book_exists(payload):
