@@ -10,6 +10,8 @@ def create_app(config_class=Config):
     """Application factory setup"""
     app = Flask(__name__)
     
+    app.config['METHODS'] = ['GET', 'POST', 'PUT','PATCH', 'DELETE','HEAD', 'OPTIONS']
+    
     # Load configuration
     app.config.from_object(config_class)
     
