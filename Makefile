@@ -50,7 +50,7 @@ migrate:
 # Create a new database migration
 migration:
 	@echo "Creating new database migration..."
-	docker compose -f local.yml run --rm api alembic revision -m "$(MESSAGE)"
+	docker compose -f local.yml run --rm api alembic revision --autogenerate -m "$(MESSAGE)"
 
 # Seed database with initial data
 seed-db:

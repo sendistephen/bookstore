@@ -16,6 +16,9 @@ class BookCategory(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
+    # Relationship with books (no need to define here since we use backref in Book model)
+    # books relationship is automatically created by backref in Book model
+    
     def to_dict(self) -> dict:
         """Convert the BookCategory object to a dictionary"""
         return {
