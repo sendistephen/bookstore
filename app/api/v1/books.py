@@ -155,3 +155,39 @@ def update_book(current_user, book_id):
     except Exception as e:
         current_app.logger.error(f"Book update error: {str(e)}")
         return internal_server_error('Error updating book')
+
+@bp.route('/books/<book_id>', methods=['DELETE'])
+@token_required
+@admin_required
+def delete_book(current_user, book_id):
+    """
+    Delete a book endpoint
+    
+    Requires:
+    - Admin authentication
+    - Valid book ID
+    
+    Returns:
+    - Success message on success
+    - Error message on failure
+    """
+    
+    try:
+        # Delete book through service
+        deleted_book, error = BookService.delete_book(book_id)
+
+        # Handle potential errors
+        if error:
+            return bad_request_error(error)
+
+        # Return successful response
+        return jsonify({
+            'status': 'success',
+            'message': 'Book deleted successfully',
+            'data': deleted_book
+        }), 200
+
+    except Exception as e:
+        current_app.logger.error(f"Book deletion error: {str(e)}")
+        return internal_server_error('Error deleting book')
+    

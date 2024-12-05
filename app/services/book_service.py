@@ -182,8 +182,29 @@ class BookService:
 
     @staticmethod
     def delete_book(book_id):
-        """Delete a book"""
-        pass
+        """
+        Delete a book
+        
+        Args:
+            book_id (str): Unique identifier of the book to delete
+        
+        Returns:
+            None, error message if book not found
+        """
+        try:
+            # find the book
+            book = Book.query.get(book_id)
+            if not book:
+                return None, f"Book with ID {book_id} not found"
+            
+            # delete the book
+            db.session.delete(book)
+            db.session.commit()
+            return None, None
+        except Exception as e:
+            db.session.rollback()
+            current_app.logger.error(f"Error deleting book {book_id}: {str(e)}")
+            return None, str(e)
 
     @staticmethod
     def search_books(query):
