@@ -57,6 +57,27 @@ def get_books():
         current_app.logger.error(f"Books retrieval error: {str(e)}")
         return internal_server_error('Error retrieving books')
 
+@bp.route('/books/<book_id>', methods=['GET'])
+def get_book(book_id):
+    """
+    Retrieve a book by ID endpoint
+    """
+    try:
+        book, error = BookService.get_book_by_id(book_id)
+        if error:
+            return bad_request_error(error)
+        
+        return jsonify({
+            'status':'success',
+            'message': 'Book retrieved successfully',
+            'data': book
+        }),200
+    
+    except Exception as e:
+        current_app.logger.error(f"Book retrieval error: {str(e)}")
+        return internal_server_error('Error retrieving book')
+  
+    
 @bp.route('/books', methods=['POST'])
 @token_required
 @admin_required
