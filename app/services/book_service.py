@@ -4,14 +4,84 @@ from flask import current_app
 from app.extensions import db
 from datetime import datetime
 from app.schemas.book_schema import BookSchema
+from sqlalchemy import desc, or_
 
 class BookService:
     """Book service class"""
 
     @staticmethod
-    def get_all_books():
-        """Get all books"""
-        pass
+    def get_all_books(page=1, per_page=10, sort_by='created_at', order='desc', search=None, category_id=None):
+        """
+        Fetch books with pagination and filtering
+        
+        Args:
+            page (int): Current page number
+            per_page (int): Number of items per page
+            sort_by (str): Field to sort by
+            order (str): Sort order ('asc' or 'desc')
+            search (str, optional): Search term for title or description
+            category_id (str, optional): Filter by category
+        
+        Returns:
+            dict: Pagination metadata and book list
+        """
+        try:
+            # Build a query
+            query = Book.query
+
+            # Apply category filter if provided
+            if category_id:
+                query = query.filter(Book.category_id == category_id)
+
+            # Apply search filter if provided
+            if search:
+                # Remove quotes if present
+                search = search.strip("'\"")
+                
+                # Ensure search is not an empty string
+                if search:
+                    search_term = f"%{search}%"
+                    query = query.filter(
+                        or_(
+                            Book.title.ilike(search_term),
+                        )
+                    )
+
+            # Determine sort column and order
+            sort_column = getattr(Book, sort_by, Book.created_at)
+            sort_method = desc(sort_column) if order == 'desc' else sort_column
+
+            # Apply sorting
+            query = query.order_by(sort_method)
+
+            # Paginate results
+            paginated_books = query.paginate(
+                page=page, 
+                per_page=per_page, 
+                error_out=False
+            )
+
+            # Serialize books
+            book_schema = BookSchema(many=True)
+            serialized_books = book_schema.dump(paginated_books.items)
+
+            # Prepare pagination metadata
+            return {
+                'data': serialized_books,
+                'pagination': {
+                    'total_items': paginated_books.total,
+                    'total_pages': paginated_books.pages,
+                    'current_page': page,
+                    'per_page': per_page,
+                    'has_next': paginated_books.has_next,
+                    'has_prev': paginated_books.has_prev,
+                    'next_page': page + 1 if paginated_books.has_next else None,
+                    'prev_page': page - 1 if paginated_books.has_prev else None
+                }
+            }
+        except Exception as e:
+            current_app.logger.error(f"Error fetching books: {str(e)}")
+            return None, str(e)
 
     @staticmethod
     def get_book_by_id(book_id):
