@@ -3,7 +3,7 @@ from app.models.book import Book
 from flask import current_app
 from app.extensions import db
 from datetime import datetime
-from app.schemas.book_schema import BookSchema
+from app.schemas.book_schema import BookSchema, BookUpdateSchema
 from sqlalchemy import desc, or_
 
 class BookService:
@@ -143,9 +143,42 @@ class BookService:
             return None, str(e)
 
     @staticmethod
-    def update_book(book_id, book_data):
-        """Update an existing book"""
-        pass
+    def update_book(book_id, payload,partial=False):
+        """
+        Update an existing book
+        
+        Args:
+            book_id (str): Unique identifier of the book to update
+            payload (dict): Book update data
+        
+        Returns:
+            tuple: (updated_book, error)
+        """
+        try:
+            # Find the book
+            book = Book.query.get(book_id)
+            if not book:
+                return None, f"Book with ID {book_id} not found"
+
+            # Validate and deserialize update payload
+            book_update_schema = BookUpdateSchema(partial=partial)
+            update_data = book_update_schema.load(payload, instance=book, session=db.session)
+
+            # Update timestamps
+            update_data.updated_at = datetime.utcnow()
+
+            # Commit changes
+            db.session.commit()
+
+            # Serialize and return updated book
+            book_schema = BookSchema()
+            return book_schema.dump(update_data), None
+
+        except Exception as e:
+            # Rollback in case of error
+            db.session.rollback()
+            current_app.logger.error(f"Error updating book {book_id}: {str(e)}")
+            return None, str(e)
 
     @staticmethod
     def delete_book(book_id):
