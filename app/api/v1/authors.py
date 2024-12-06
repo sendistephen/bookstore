@@ -9,7 +9,21 @@ from app.api.v1.auth import token_required, admin_required
 @bp.route('/authors', methods=['GET'])
 def list_authors():
     """List all authors"""
-    pass
+    try:
+        authors, error = AuthorService.get_authors()
+        if error:
+            return error_response(500, 'Failed to retrieve authors', error)
+
+        return jsonify({
+            'status': 'success',
+            'data': {
+                'authors': authors,
+                'total_authors': len(authors)
+            }
+        }), 200
+    except Exception as e:
+        current_app.logger.error(f"Error listing authors: {str(e)}")
+        return error_response(500, 'Internal server error', str(e))
 
 @bp.route('/authors/<author_id>', methods=['GET'])
 def get_author(author_id):

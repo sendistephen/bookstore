@@ -6,6 +6,18 @@ from marshmallow.exceptions import ValidationError
 
 class AuthorService:
     """Author service class"""
+    @staticmethod
+    def get_authors():
+        """Get all authors"""
+        try:
+            # Get all authors from the db...
+            authors = Author.query.all()
+            # Convert model instances into JSON serializable format
+            author_schema = AuthorSchema(many=True)
+            return author_schema.dump(authors), None
+        except Exception as e:
+            current_app.logger.error(f"Error getting authors: {e}")
+            return None, str(e)
     
     @staticmethod
     def get_author(author_id):
