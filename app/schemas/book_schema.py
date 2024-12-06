@@ -2,6 +2,7 @@ from app.extensions import ma
 from marshmallow import validate, pre_load
 from app.models.book import Book
 from app.schemas.book_category_schema import BookCategorySchema
+from app.schemas.author_schema import AuthorSchema
 
 class BookSchema(ma.SQLAlchemyAutoSchema):
     """Book schema class"""
@@ -18,9 +19,15 @@ class BookSchema(ma.SQLAlchemyAutoSchema):
     price = ma.Float(required=True, validate=validate.Range(min=0))
     stock_quantity = ma.Integer(required=True, validate=validate.Range(min=0))
     
-    # Include nested category information
+    # Include nested category and author information
     category = ma.Nested(BookCategorySchema, dump_only=True)
+    author = ma.Nested('AuthorSchema', exclude=('authored_books',), dump_only=True)
     category_id = ma.String(required=True, load_only=True)
+
+    @pre_load
+    def remove_none_values(self, data, **kwargs):
+        """Remove None values to allow partial updates"""
+        return {k: v for k, v in data.items() if v is not None}
 
 
 class BookUpdateSchema(ma.SQLAlchemyAutoSchema):

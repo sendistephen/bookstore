@@ -24,7 +24,11 @@ class Book(db.Model):
     category = db.relationship('BookCategory', backref=db.backref('books', lazy=True))
     
     #Relationship to configuration
-    # author = db.relationship('Author', back_populates='books')
+    author_id = db.Column(db.String(36), db.ForeignKey('authors.id'), nullable=True)
+    author = db.relationship('Author', 
+        back_populates='authored_books',  
+        foreign_keys=[author_id]
+    )
     
     # publisher_id = db.Column(db.String(36), db.ForeignKey('publisher.id'), nullable=False)
     # publisher = db.relationship('Publisher', back_populates='books')
