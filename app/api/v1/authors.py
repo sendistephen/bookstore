@@ -1,8 +1,8 @@
 from flask import jsonify, current_app, request
 from app.api.v1 import bp
 from app.services.author_service import AuthorService
-from utils.error_handler import bad_request_error, error_response, not_found, internal_server_error
-from flask_jwt_extended import jwt_required, get_jwt_identity
+from utils.error_handler import bad_request_error, error_response, not_found_error
+from flask_jwt_extended import jwt_required
 from app.api.v1.auth_utils import admin_required
 
 @bp.route('/authors', methods=['GET'])
@@ -30,7 +30,7 @@ def get_author(author_id):
     try:
         author, error = AuthorService.get_author_by_id(author_id)
         if error:
-            return not_found(error)
+            return not_found_error(error)
             
         return jsonify({
             'status': 'success',
@@ -129,7 +129,7 @@ def get_books_by_author(author_id):
     try:
         books, error = AuthorService.get_books_by_author(author_id)
         if error:
-            return not_found(error)
+            return not_found_error(error)
             
         return jsonify({
             'status': 'success',

@@ -10,6 +10,33 @@ class CartService:
     """
     
     @staticmethod
+    def get_active_cart(user_id):
+        """
+        Get the user's active cart with all items
+        
+        Args:
+            user_id (str): User ID
+            
+        Returns:
+            tuple: (cart_data, None) if successful, (None, error_message) if failed
+        """
+        try:
+            # Get active cart with items
+            cart = Cart.query.filter_by(
+                user_id=user_id,
+                status='active'
+            ).first()
+            
+            if not cart:
+                return None, "No active cart found"
+                
+            return cart, None
+            
+        except Exception as e:
+            current_app.logger.error(f"Error fetching cart: {str(e)}")
+            return None, str(e)
+    
+    @staticmethod
     def add_to_cart(user_id, book_id, quantity):
         """
         Add a book to the user's cart
@@ -61,7 +88,9 @@ class CartService:
                 db.session.add(cart_item)
             
             # Update cart totals
-            cart.total_items = sum(item.quantity for item in cart.cart_items)
+            # total_items is the number of unique items in cart
+            cart.total_items = len(cart.cart_items)
+            # total_price is the sum of all item subtotals
             cart.total_price = sum(item.subtotal for item in cart.cart_items)
             
             db.session.commit()

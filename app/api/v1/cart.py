@@ -1,11 +1,42 @@
 from flask import request, jsonify, current_app
 from app.api.v1 import bp
-from utils.error_handler import bad_request_error, internal_server_error
+from utils.error_handler import bad_request_error, internal_server_error, not_found_error
 from app.services.cart_service import CartService
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from app.schemas import CartSchema
 
 cart_schema = CartSchema()
+
+@bp.route('/cart', methods=['GET'])
+@jwt_required()
+def view_cart():
+    """
+    Get the current user's active cart
+    
+    Returns:
+        - Cart details with items on success
+        - Error message on failure
+    """
+    try:
+        # Get current user from JWT token
+        current_user_id = get_jwt_identity()
+        
+        # Get active cart
+        cart, error = CartService.get_active_cart(current_user_id)
+        if error:
+            return not_found_error(error)
+            
+        return jsonify({
+            'status': 'success',
+            'message': 'Cart retrieved successfully',
+            'data': {
+                'cart': cart_schema.dump(cart)
+            }
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error retrieving cart: {str(e)}")
+        return internal_server_error('Failed to retrieve cart')
 
 @bp.route('/cart/add', methods=['POST'])
 @jwt_required()

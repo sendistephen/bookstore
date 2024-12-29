@@ -1,7 +1,7 @@
 from flask import request, jsonify, current_app
 from app.api.v1 import bp
 from app.api.v1.auth_utils import admin_required
-from utils.error_handler import bad_request_error, internal_server_error, not_found
+from utils.error_handler import bad_request_error, internal_server_error, not_found_error
 from app.services.book_service import BookService
 from flask_jwt_extended import jwt_required, get_jwt_identity
 
@@ -70,7 +70,7 @@ def get_book(book_id):
     try:
         book, error = BookService.get_book_by_id(book_id)
         if error:
-            return not_found(error)
+            return not_found_error(error)
 
         return jsonify({
             'status': 'success',
@@ -146,7 +146,7 @@ def delete_book(book_id):
         success, error = BookService.delete_book(book_id)
         
         if error:
-            return not_found(error)
+            return not_found_error(error)
 
         return jsonify({
             'status': 'success',
