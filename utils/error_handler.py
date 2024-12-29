@@ -21,7 +21,7 @@ def error_response(status_code, message=None):
     return response
 
 
-def not_found(message=None):
+def not_found_error(message=None):
     """Generate a 404 not found error response"""
     return error_response(404, message or "Resource not found")
 

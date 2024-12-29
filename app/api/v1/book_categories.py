@@ -3,7 +3,7 @@ from marshmallow import ValidationError
 from app.api.v1 import bp
 from app.services.book_category_service import BookCategoryService
 from app.schemas.book_category_schema import BookCategorySchema
-from utils.error_handler import bad_request_error, error_response, not_found, internal_server_error
+from utils.error_handler import bad_request_error, error_response, not_found_error, internal_server_error
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from app.api.v1.auth_utils import admin_required
 
@@ -78,7 +78,7 @@ def update_book_category(category_id):
             
         category = BookCategoryService.update_book_category(category_id, data)
         if not category:
-            return not_found('Book category not found')
+            return not_found_error('Book category not found')
             
         return jsonify({
             'status': 'success',
@@ -103,7 +103,7 @@ def delete_book_category(category_id):
                 'message': 'Book category deleted successfully'
             }), 200
         else:
-            return not_found('Book category not found')
+            return not_found_error('Book category not found')
             
     except Exception as e:
         current_app.logger.error(f"Error deleting book category: {str(e)}")
