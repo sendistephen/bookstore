@@ -182,3 +182,38 @@ class CartService:
             current_app.logger.error(f"Error updating cart item: {str(e)}")
             db.session.rollback()
             return None, str(e)
+
+    @staticmethod
+    def clear_cart(user_id):
+        """
+        Clear all items from the user's active cart
+        
+        Args:
+            user_id (str): User ID
+            
+        Returns:
+            tuple: (cart_data, None) if successful, (None, error_message) if failed
+        """
+        try:
+            # Get active cart for the user
+            cart = Cart.query.filter_by(user_id=user_id, status='active').first()
+            if not cart:
+                return None, "No active cart found"
+            
+            # Delete all cart items
+            CartItem.query.filter_by(cart_id=cart.id).delete()
+            
+            # Update cart status and totals
+            cart.total_items = 0
+            cart.total_price = 0.0
+            # Keep status as 'active', but with zero items
+            cart.status = 'active'
+            
+            db.session.commit()
+            
+            return cart, None
+            
+        except Exception as e:
+            current_app.logger.error(f"Error clearing cart: {str(e)}")
+            db.session.rollback()
+            return None, str(e)

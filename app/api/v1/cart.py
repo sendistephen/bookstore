@@ -169,3 +169,39 @@ def update_cart():
     except Exception as e:
         current_app.logger.error(f"Error updating cart item: {str(e)}")
         return internal_server_error('Failed to update cart item')
+
+@bp.route('/cart/clear', methods=['DELETE'])
+@jwt_required()
+def clear_cart():
+    """
+    Clear all items from the user's cart
+    
+    Returns:
+          - Cart details on success
+          - Error message on failure
+    """
+    try:
+        # Get current user from JWT token
+        current_user_id = get_jwt_identity()
+        
+        # Clear cart
+        cart, error = CartService.clear_cart(current_user_id)
+        
+        # Handle errors
+        if error:
+            return bad_request_error(error)
+            
+        return jsonify({
+            'status': 'success',
+            'message': 'Cart cleared successfully',
+            'data': {
+                'cart_cleared': True,
+                'cart_id': cart.id,
+                'total_items': cart.total_items,
+                'total_price': cart.total_price
+            }
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error clearing cart: {str(e)}")
+        return internal_server_error('Failed to clear cart')
