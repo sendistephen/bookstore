@@ -1,10 +1,9 @@
 from flask import jsonify, current_app, request
-from marshmallow import ValidationError
 from app.api.v1 import bp
 from app.services.author_service import AuthorService
-from app.schemas.author_schema import AuthorSchema
 from utils.error_handler import bad_request_error, error_response, not_found, internal_server_error
-from app.api.v1.auth import token_required, admin_required
+from flask_jwt_extended import jwt_required, get_jwt_identity
+from app.api.v1.auth_utils import admin_required
 
 @bp.route('/authors', methods=['GET'])
 def list_authors():
@@ -28,12 +27,25 @@ def list_authors():
 @bp.route('/authors/<author_id>', methods=['GET'])
 def get_author(author_id):
     """Get an author by ID"""
-    pass
+    try:
+        author, error = AuthorService.get_author_by_id(author_id)
+        if error:
+            return not_found(error)
+            
+        return jsonify({
+            'status': 'success',
+            'data': {
+                'author': author
+            }
+        }), 200
+    except Exception as e:
+        current_app.logger.error(f"Error getting author: {str(e)}")
+        return error_response(500, 'Internal server error', str(e))
 
 @bp.route('/authors', methods=['POST'])
-@token_required
-@admin_required
-def create_author(current_user):
+@jwt_required()
+@admin_required()
+def create_author():
     """Create a new author"""
     try:
         # Check JSON request
@@ -52,30 +64,80 @@ def create_author(current_user):
             return error_response(400, 'Author creation failed', error)
 
         return jsonify({
-            'status':'success',
+            'status': 'success',
             'message': 'Author created successfully',
-            'data': author
+            'data': {
+                'author': author
+            }
         }), 201
         
     except Exception as e:
-        current_app.logger.error(f"Author creation error: {str(e)}")
-        return internal_server_error('Error creating author')
+        current_app.logger.error(f"Error creating author: {str(e)}")
+        return error_response(500, 'Internal server error', str(e))
 
-@bp.route('/authors/<author_id>', methods=['PUT', 'PATCH'])
-@token_required
-@admin_required
-def update_author(current_user, author_id):
+@bp.route('/authors/<author_id>', methods=['PUT'])
+@jwt_required()
+@admin_required()
+def update_author(author_id):
     """Update an author"""
-    pass
+    try:
+        # Check JSON request
+        payload = request.get_json()
+        if not payload:
+            return bad_request_error('Request must be JSON')
+
+        # Update author
+        author, error = AuthorService.update_author(author_id, payload)
+        if error:
+            return error_response(400, 'Author update failed', error)
+
+        return jsonify({
+            'status': 'success',
+            'message': 'Author updated successfully',
+            'data': {
+                'author': author
+            }
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error updating author: {str(e)}")
+        return error_response(500, 'Internal server error', str(e))
 
 @bp.route('/authors/<author_id>', methods=['DELETE'])
-@token_required
-@admin_required
-def delete_author(current_user, author_id):
+@jwt_required()
+@admin_required()
+def delete_author(author_id):
     """Delete an author"""
-    pass
+    try:
+        # Delete author
+        success, error = AuthorService.delete_author(author_id)
+        if error:
+            return error_response(400, 'Author deletion failed', error)
+
+        return jsonify({
+            'status': 'success',
+            'message': 'Author deleted successfully'
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error deleting author: {str(e)}")
+        return error_response(500, 'Internal server error', str(e))
 
 @bp.route('/authors/<author_id>/books', methods=['GET'])
 def get_books_by_author(author_id):
     """Get books by author"""
-    pass
+    try:
+        books, error = AuthorService.get_books_by_author(author_id)
+        if error:
+            return not_found(error)
+            
+        return jsonify({
+            'status': 'success',
+            'data': {
+                'books': books,
+                'total_books': len(books)
+            }
+        }), 200
+    except Exception as e:
+        current_app.logger.error(f"Error getting books by author: {str(e)}")
+        return error_response(500, 'Internal server error', str(e))

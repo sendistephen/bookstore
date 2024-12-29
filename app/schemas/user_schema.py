@@ -1,6 +1,14 @@
 from marshmallow import fields, Schema, validate, validates
 from app.models.user import User
 from utils.error_handler import bad_request_error
+from app.extensions import ma
+
+class UserSchema(ma.SQLAlchemyAutoSchema):
+    """Schema for serializing user data"""
+    class Meta:
+        model = User
+        load_instance = True
+        exclude = ('password_hash',)
 
 class UserRegistrationSchema(Schema):
     """Schema for user registration validation"""

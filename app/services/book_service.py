@@ -1,4 +1,3 @@
-from utils.error_handler import bad_request_error
 from app.models.book import Book
 from flask import current_app
 from app.extensions import db
@@ -188,7 +187,7 @@ class BookService:
         Args:
             book_id (str): Unique identifier of the book to delete
         
-        Returns:
+        Returns: 
             None, error message if book not found
         """
         try:

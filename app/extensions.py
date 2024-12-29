@@ -1,12 +1,14 @@
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from flask_marshmallow import Marshmallow
+from flask_jwt_extended import JWTManager
 from app.services.email_service import mail
 
 # instantiate SQLAlchemy and Migrate
 db: SQLAlchemy = SQLAlchemy()
 migrate: Migrate = Migrate()
 ma = Marshmallow()
+jwt = JWTManager()
 
 def init_extensions(app):
     """
@@ -24,6 +26,9 @@ def init_extensions(app):
     
     # Initialize Flask-Migrate
     migrate.init_app(app, db)
+    
+    # Initialize JWT
+    jwt.init_app(app)
     
     # Initialize Mail
     mail.init_app(app)

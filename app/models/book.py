@@ -30,8 +30,8 @@ class Book(db.Model):
         foreign_keys=[author_id]
     )
     
-    # publisher_id = db.Column(db.String(36), db.ForeignKey('publisher.id'), nullable=False)
-    # publisher = db.relationship('Publisher', back_populates='books')
+    # Cart relationship
+    cart_items = db.relationship('CartItem', back_populates='book', lazy='dynamic')
     
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
