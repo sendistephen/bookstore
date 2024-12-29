@@ -22,7 +22,7 @@ class BookService:
             category_id (str, optional): Filter by category
         
         Returns:
-            dict: Pagination metadata and book list
+            tuple: (books, total_items, error)
         """
         try:
             # Build a query
@@ -64,23 +64,12 @@ class BookService:
             book_schema = BookSchema(many=True)
             serialized_books = book_schema.dump(paginated_books.items)
 
-            # Prepare pagination metadata
-            return {
-                'data': serialized_books,
-                'pagination': {
-                    'total_items': paginated_books.total,
-                    'total_pages': paginated_books.pages,
-                    'current_page': page,
-                    'per_page': per_page,
-                    'has_next': paginated_books.has_next,
-                    'has_prev': paginated_books.has_prev,
-                    'next_page': page + 1 if paginated_books.has_next else None,
-                    'prev_page': page - 1 if paginated_books.has_prev else None
-                }
-            }
+            # Return books, total items, and no error
+            return serialized_books, paginated_books.total, None
+        
         except Exception as e:
             current_app.logger.error(f"Error fetching books: {str(e)}")
-            return None, str(e)
+            return None, 0, str(e)
 
     @staticmethod
     def get_book_by_id(book_id):
