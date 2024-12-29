@@ -205,3 +205,70 @@ def clear_cart():
     except Exception as e:
         current_app.logger.error(f"Error clearing cart: {str(e)}")
         return internal_server_error('Failed to clear cart')
+
+@bp.route('/cart/remove', methods=['DELETE'])
+@jwt_required()
+def remove_cart_item():
+    """
+    Remove a specific item from the user's cart
+    Reduces quantity by 1, or removes the entire item if quantity is 1
+    
+    Request JSON:
+    {
+        "book_id": "string"
+    }
+    Returns:
+          - Cart details on success
+          - Error message on failure
+    """
+    try:
+        # Validate JSON request
+        if not request.is_json:
+            return bad_request_error('Request must be JSON')
+        
+        # Get request data
+        data = request.get_json()
+        if not data:
+            return bad_request_error('Request data is empty')
+        
+        # Validate required fields
+        book_id = data.get('book_id')
+        if not book_id:
+            return bad_request_error('Book ID is required')
+        
+        # Get current user from JWT token
+        current_user_id = get_jwt_identity()
+        
+        # Remove cart item
+        cart, removed_item_info, error = CartService.remove_cart_item(current_user_id, book_id)
+        
+        # Handle errors
+        if error:
+            return bad_request_error(error)
+            
+        # Prepare response message
+        if removed_item_info['removed_completely']:
+            message = f"'{removed_item_info['book_title']}' completely removed from cart"
+        else:
+            message = f"Quantity of '{removed_item_info['book_title']}' reduced. " \
+                      f"Remaining quantity: {removed_item_info['remaining_quantity']}"
+        
+        return jsonify({
+            'status': 'success',
+            'message': message,
+            'data': {
+                'cart_id': cart.id,
+                'total_items': cart.total_items,
+                'total_price': cart.total_price,
+                'removed_item': {
+                    'book_id': removed_item_info['book_id'],
+                    'book_title': removed_item_info['book_title'],
+                    'previous_quantity': removed_item_info['previous_quantity'],
+                    'removed_completely': removed_item_info['removed_completely']
+                }
+            }
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error removing cart item: {str(e)}")
+        return internal_server_error('Failed to remove cart item')

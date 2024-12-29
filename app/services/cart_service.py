@@ -59,23 +59,30 @@ class CartService:
             if not book:
                 return None, f"Book with ID {book_id} not found"
             
-            # Check stock availability
-            if book.stock_quantity < quantity:
-                return None, f"Book '{book.title}' is out of stock. Only {book.stock_quantity} available."
-            
             # Get or create active cart for the user
             cart = Cart.query.filter_by(user_id=user_id, status='active').first()
             if not cart:
                 cart = Cart(user_id=user_id, status='active')
                 db.session.add(cart)
             
-            # check if book already exists in cart
-            existing_cart_item = CartItem.query.filter_by(cart_id=cart.id, book_id=book_id).first() 
+            # Check existing cart item for this book
+            existing_cart_item = CartItem.query.filter_by(cart_id=cart.id, book_id=book_id).first()
+            
+            # Calculate total quantity in cart and proposed new quantity
+            total_cart_quantity = quantity
+            if existing_cart_item:
+                total_cart_quantity += existing_cart_item.quantity
+            
+            # Check stock availability
+            if book.stock_quantity < total_cart_quantity:
+                return None, f"Insufficient stock for book '{book.title}'. " \
+                              f"Available: {book.stock_quantity}, " \
+                              f"Requested: {total_cart_quantity}"
             
             if existing_cart_item:
                 # Update existing cart item
                 existing_cart_item.quantity += quantity
-                existing_cart_item.subtotal = existing_cart_item.quantity * book.price
+                existing_cart_item.subtotal = round(existing_cart_item.quantity * book.price, 2)
             else:
                 # Create new cart item
                 cart_item = CartItem(
@@ -83,15 +90,16 @@ class CartService:
                     book_id=book_id,
                     quantity=quantity,
                     price_at_addition=book.price,
-                    subtotal=quantity * book.price
+                    subtotal=round(quantity * book.price, 2)
                 )
                 db.session.add(cart_item)
             
+            # Recalculate cart totals
+            cart_items = CartItem.query.filter_by(cart_id=cart.id).all()
+            
             # Update cart totals
-            # total_items is the number of unique items in cart
-            cart.total_items = len(cart.cart_items)
-            # total_price is the sum of all item subtotals
-            cart.total_price = sum(item.subtotal for item in cart.cart_items)
+            cart.total_items = len(cart_items)  # Number of unique items
+            cart.total_price = round(sum(item.subtotal for item in cart_items), 2)
             
             db.session.commit()
             
@@ -137,11 +145,11 @@ class CartService:
             if not cart_item:
                 return None, f"Book {book_id} not in cart"
             
-            # Check stock availability if increasing quantity
-            if quantity > cart_item.quantity:
-                additional_quantity = quantity - cart_item.quantity
-                if book.stock_quantity < additional_quantity:
-                    return None, f"Book '{book.title}' is out of stock. Only {book.stock_quantity} additional can be added."
+            # Check stock availability
+            if book.stock_quantity < quantity:
+                return None, f"Insufficient stock for book '{book.title}'. " \
+                              f"Available: {book.stock_quantity}, " \
+                              f"Requested: {quantity}"
             
             # Update quantity and subtotal
             if quantity == 0:
@@ -149,7 +157,7 @@ class CartService:
                 db.session.delete(cart_item)
             else:
                 cart_item.quantity = quantity
-                cart_item.subtotal = quantity * book.price
+                cart_item.subtotal = round(quantity * book.price, 2)
             
             # Refresh cart items
             db.session.flush()
@@ -158,19 +166,17 @@ class CartService:
             remaining_items = CartItem.query.filter_by(cart_id=cart.id).all()
             
             if not remaining_items:
-                # If no items left, mark cart as empty but don't delete
+                # If no items left, reset cart totals
                 cart.total_items = 0
                 cart.total_price = 0.0
-                cart.status = 'empty'
             else:
                 # Update cart totals
                 cart.total_items = len(remaining_items)
-                cart.total_price = sum(item.subtotal for item in remaining_items)
-                cart.status = 'active'
+                cart.total_price = round(sum(item.subtotal for item in remaining_items), 2)
             
             db.session.commit()
             
-            # If no items left, return cart with empty status
+            # If no items left, return cart with zero totals
             if not remaining_items:
                 return cart, None
             
@@ -182,6 +188,75 @@ class CartService:
             current_app.logger.error(f"Error updating cart item: {str(e)}")
             db.session.rollback()
             return None, str(e)
+
+    @staticmethod
+    def remove_cart_item(user_id, book_id):
+        """
+        Remove a specific item from the user's cart
+        If quantity > 1, reduce quantity by 1
+        If quantity is 1, remove the entire cart item
+        
+        Args:
+            user_id (str): User ID
+            book_id (str): Book ID to remove
+            
+        Returns:
+            tuple: (cart_data, removed_item_info, None) if successful, 
+                   (None, None, error_message) if failed
+        """
+        try:
+            # Get active cart for the user
+            cart = Cart.query.filter_by(user_id=user_id, status='active').first()
+            if not cart:
+                return None, None, "No active cart found"
+            
+            # Find the cart item to remove
+            cart_item = CartItem.query.filter_by(cart_id=cart.id, book_id=book_id).first()
+            if not cart_item:
+                return None, None, f"Book {book_id} not found in cart"
+            
+            # Prepare removal information
+            removed_item_info = {
+                'book_id': book_id,
+                'book_title': cart_item.book.title,
+                'previous_quantity': cart_item.quantity,
+                'removed_completely': False
+            }
+            
+            # If quantity is 1, remove the entire cart item
+            if cart_item.quantity <= 1:
+                db.session.delete(cart_item)
+                removed_item_info['removed_completely'] = True
+            else:
+                # Reduce quantity by 1
+                cart_item.quantity -= 1
+                # Recalculate subtotal
+                cart_item.subtotal = round(cart_item.quantity * cart_item.price_at_addition, 2)
+                removed_item_info['remaining_quantity'] = cart_item.quantity
+            
+            # Refresh cart items
+            db.session.flush()
+            
+            # Recalculate cart totals
+            remaining_items = CartItem.query.filter_by(cart_id=cart.id).all()
+            
+            if not remaining_items:
+                # If no items left, reset cart totals
+                cart.total_items = 0
+                cart.total_price = 0.0
+            else:
+                # Update cart totals
+                cart.total_items = len(remaining_items)
+                cart.total_price = round(sum(item.subtotal for item in remaining_items), 2)
+            
+            db.session.commit()
+            
+            return cart, removed_item_info, None
+            
+        except Exception as e:
+            current_app.logger.error(f"Error removing cart item: {str(e)}")
+            db.session.rollback()
+            return None, None, str(e)
 
     @staticmethod
     def clear_cart(user_id):
@@ -206,8 +281,6 @@ class CartService:
             # Update cart status and totals
             cart.total_items = 0
             cart.total_price = 0.0
-            # Keep status as 'active', but with zero items
-            cart.status = 'active'
             
             db.session.commit()
             
