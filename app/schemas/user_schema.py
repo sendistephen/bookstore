@@ -22,7 +22,7 @@ class UserRegistrationSchema(Schema):
                 error='Username must contain only letters, numbers, and underscores'
             )
         ],
-        error="Username is required"
+        metadata={'error': 'Username is required'}
     )
     name = fields.Str(
         required=True,
@@ -30,7 +30,8 @@ class UserRegistrationSchema(Schema):
             min=2,
             max=32,
             error="Name must be between 2 and 32 characters"),
-        error="Name is required")
+        metadata={'error': 'Name is required'}
+    )
     email = fields.Email(required=True)
     phone = fields.Str(required=False, allow_none=True, validate=validate.Regexp(
         regex=r'^\+(?:[0-9]){6,14}[0-9]$',
@@ -44,7 +45,7 @@ class UserRegistrationSchema(Schema):
                 error="Password must be at least 8 characters long"
             )
         ],
-        error="Password is required"
+        metadata={'error': 'Password is required'}
     )
 
     @validates('email')

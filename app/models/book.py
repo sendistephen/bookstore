@@ -14,8 +14,14 @@ class Book(db.Model):
     price = db.Column(db.Float, nullable=False)
     stock_quantity = db.Column(db.Integer, nullable=False)
     
+    # Book cover image
+    front_cover_url = db.Column(db.String(500))
+    front_cover_public_id = db.Column(db.String(255))
+    back_cover_url = db.Column(db.String(500))
+    back_cover_public_id = db.Column(db.String(255))
+    
     # Metadata
-    publication_date = db.Column(db.Date, nullable=True)
+    publication_date = db.Column(db.Date)
     edition = db.Column(db.String(50), nullable=True)
     language = db.Column(db.String(50), nullable=True)
     

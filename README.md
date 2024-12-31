@@ -152,6 +152,75 @@ make reset-db
 - Check Docker logs with `docker-compose -f local.yml logs api` for detailed error messages
 - Ensure all environment variables are correctly set in `.env`
 
+## Testing
+
+### Setup for Testing
+
+1. Create a virtual environment:
+```bash
+python3 -m venv venv
+source venv/bin/activate
+```
+
+2. Install dependencies:
+```bash
+pip install -r requirements.txt
+pip install -r requirements-dev.txt
+```
+
+### Running Tests
+
+Run the full test suite with coverage:
+```bash
+# Run all tests with verbose output and coverage
+pytest -vv --cov=app
+
+# Run tests for a specific module
+pytest tests/unit/test_book_category_service.py
+
+# Generate HTML coverage report
+pytest --cov=app --cov-report=html
+```
+
+### Test Configuration
+
+- Tests use an in-memory SQLite database
+- Configuration is managed through `config/config.py`
+- Test fixtures are defined in `tests/conftest.py`
+
+### Common Test Commands
+
+```bash
+# Run tests and stop on first failure
+pytest -x
+
+# Run tests with detailed output
+pytest -s
+
+# Run tests matching a specific pattern
+pytest -k "test_create"
+```
+
+### Code Quality Checks
+
+```bash
+# Run linters
+flake8 app/
+black --check app/
+isort --check-only app/
+
+# Run type checking
+mypy app/
+```
+
+### Debugging Tests
+
+If you encounter import or configuration issues:
+1. Ensure all dependencies are installed
+2. Check your Python path
+3. Verify environment variables
+4. Use `pytest -vv` for detailed output
+
 ## Deployment
 
 ### Fresh Installation

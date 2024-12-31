@@ -3,6 +3,8 @@ import secrets
 from typing import Dict, Type
 from dotenv import load_dotenv
 from datetime import timedelta
+from config.payment_config import PaymentMethod, PaymentConfiguration
+import logging
 
 load_dotenv()
 
@@ -57,9 +59,11 @@ class Config:
     REDIS_URL: str = os.environ.get('REDIS_URL', f'redis://{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}')
     
     # Session configuration
-    SESSION_TYPE: str = 'redis'
-    SESSION_PERMANENT: bool = True
-    PERMANENT_SESSION_LIFETIME: timedelta = timedelta(minutes=30)
+    SESSION_TYPE: str = 'filesystem'
+    SESSION_PERMANENT: bool = False
+    SESSION_FILESYSTEM_DIR = '/tmp/flask_session'  # Specify a directory for filesystem sessions
+    SESSION_FILE_THRESHOLD = 100  # Number of sessions to store before cleaning
+    SESSION_FILE_MODE = 0o600  # Secure file permissions
     SESSION_USE_SIGNER: bool = True
     SESSION_KEY_PREFIX: str = 'bookstore:'
     SESSION_COOKIE_SECURE: bool = False  # Set to True in production
@@ -67,6 +71,23 @@ class Config:
     SESSION_COOKIE_SAMESITE: str = 'Lax'
     SESSION_REFRESH_EACH_REQUEST: bool = True
 
+    # Payment Configuration
+    SUPPORTED_PAYMENT_METHODS = PaymentConfiguration.SUPPORTED_METHODS
+    DEFAULT_PAYMENT_CURRENCY = 'UGX'
+    
+    # Payment Gateway Configurations (placeholders)
+    MOBILE_MONEY_MTN_API_KEY = os.getenv('MOBILE_MONEY_MTN_API_KEY', '')
+    MOBILE_MONEY_AIRTEL_API_KEY = os.getenv('MOBILE_MONEY_AIRTEL_API_KEY', '')
+    
+    # Payment Limits
+    MIN_ORDER_AMOUNT = 1000  # Minimum order amount in local currency
+    MAX_ORDER_AMOUNT = 10000000  # Maximum order amount in local currency
+    
+    # Cloudinary Configuration
+    CLOUDINARY_CLOUD_NAME = os.getenv('CLOUDINARY_CLOUD_NAME')
+    CLOUDINARY_API_KEY = os.getenv('CLOUDINARY_API_KEY')
+    CLOUDINARY_API_SECRET = os.getenv('CLOUDINARY_API_SECRET')
+    
 
 class DevelopmentConfig(Config):
     """Development configuration for the application."""
@@ -92,11 +113,34 @@ class ProductionConfig(Config):
 
 class TestingConfig(Config):
     """Testing configuration for the application."""
-    TESTING: bool = True
-    SQLALCHEMY_DATABASE_URI: str = "sqlite:///memory.db"
-    MAIL_SUPPRESS_SEND: bool = True
-    WTF_CSRF_ENABLED: bool = False
-    SESSION_TYPE: str = 'filesystem'  # Use filesystem sessions in testing
+    TESTING = True
+    SQLALCHEMY_DATABASE_URI = 'sqlite:///:memory:'
+    SQLALCHEMY_TRACK_MODIFICATIONS = False
+    
+    # Disable CSRF for testing
+    WTF_CSRF_ENABLED = False
+    
+    # Reduce security for testing
+    SECRET_KEY = 'test-secret-key'
+    JWT_SECRET_KEY = 'test-jwt-secret-key'
+    
+    # Session configuration for testing
+    SESSION_TYPE = 'filesystem'
+    SESSION_PERMANENT = False
+    SESSION_USE_SIGNER = True
+    
+    # Disable rate limiting for tests
+    RATELIMIT_ENABLED = False
+    
+    # Minimal logging for tests
+    LOGGING_LEVEL = logging.ERROR
+    
+    # Disable external API calls during testing
+    EXTERNAL_API_CALLS_ENABLED = False
+    
+    # Override Redis configuration
+    REDIS_URL = None
+    SESSION_REDIS = None
 
 
 config: Dict[str, Type[Config]] = {

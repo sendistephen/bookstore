@@ -40,8 +40,22 @@ coverage.xml
 *.cover
 .hypothesis/
 
+# Testing and coverage
+.coverage
+coverage_report/
+.pytest_cache/
+htmlcov/
+*.pyc
+__pycache__/
+
 # Google OAuth Client Secret
 client_secret.json
 
 # Admin credentials
 .admin_credentials
+
+# Warnings
+.windsurfrules
+
+# Deprecation Fixes
+DEPRECATION_FIXES.md

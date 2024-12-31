@@ -1,34 +1,34 @@
 from flask_sqlalchemy import SQLAlchemy
-from flask_migrate import Migrate
 from flask_marshmallow import Marshmallow
-from flask_jwt_extended import JWTManager
-from app.services.email_service import mail
+from flask_migrate import Migrate
 
-# instantiate SQLAlchemy and Migrate
-db: SQLAlchemy = SQLAlchemy()
-migrate: Migrate = Migrate()
+# Optional imports
+try:
+    from flask_jwt_extended import JWTManager
+except ImportError:
+    JWTManager = None
+
+try:
+    from flask_session import Session
+except ImportError:
+    Session = None
+
+# Initialize extensions
+db = SQLAlchemy()
 ma = Marshmallow()
-jwt = JWTManager()
+migrate = Migrate()
 
 def init_extensions(app):
-    """
-    Intialize all extensions for the Flask application
-    
-    Args:
-        app (Flask): The Flask application instance
-    """
-    
-    # Initialize SQLAlchemy
+    """Initialize all extensions for the Flask application"""
+    # Initialize core extensions
     db.init_app(app)
-    
-    # Initialize Marshmallow
     ma.init_app(app)
-    
-    # Initialize Flask-Migrate
     migrate.init_app(app, db)
     
-    # Initialize JWT
-    jwt.init_app(app)
+    # Conditionally initialize JWT if imported
+    if JWTManager:
+        jwt = JWTManager(app)
     
-    # Initialize Mail
-    mail.init_app(app)
+    # Conditionally initialize Session if imported
+    if Session and app.config.get('SESSION_TYPE'):
+        Session(app)

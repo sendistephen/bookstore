@@ -2,7 +2,8 @@ import os
 import logging
 import json
 from logging.handlers import RotatingFileHandler, TimedRotatingFileHandler
-from datetime import datetime
+import datetime
+from datetime import timezone
 from typing import Dict, Any
 
 def json_log_formatter(record: logging.LogRecord) -> str:
@@ -16,13 +17,13 @@ def json_log_formatter(record: logging.LogRecord) -> str:
         str: A JSON-formatted log message.
     """
     log_record: Dict[str, Any] = {
-        'timestamp': datetime.utcnow().isoformat(),
+        'timestamp': datetime.datetime.now(timezone.utc).isoformat(),
         'level': record.levelname,
         'logger': record.name,
         'message': record.getMessage(),
         'module': record.module,
-        'func_name': record.funcName,
-        'line_no': record.lineno,
+        'function': record.funcName,
+        'line': record.lineno,
     }
     
     # Add exception information if present
