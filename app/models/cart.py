@@ -16,4 +16,4 @@ class Cart(db.Model):
   
    cart_items = db.relationship('CartItem', back_populates='cart', lazy='joined', cascade='all, delete-orphan')
    user_id = db.Column(db.String(36), db.ForeignKey('users.id'), nullable=False)
-   user = db.relationship('User', backref=db.backref('carts', lazy=True))
+   user = db.relationship('User', back_populates='carts')

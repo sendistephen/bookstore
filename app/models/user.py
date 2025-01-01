@@ -1,9 +1,6 @@
-from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, timedelta
 import uuid
-import re
-from utils.error_handler import bad_request_error
 from app.extensions import db
 import secrets
 from app.models.role import Role
@@ -63,9 +60,15 @@ class User(db.Model):
     # relationships
     roles = db.relationship(
         'Role',
-        secondary=user_roles,
+        secondary='user_roles',
         back_populates='users',
         lazy='dynamic')
+    
+    # Cart relationship
+    carts = db.relationship('Cart', back_populates='user', lazy='dynamic')
+    
+    # Order relationship
+    orders = db.relationship('Order', back_populates='user', lazy='dynamic')
 
     def __repr__(self):
         return f'<User {self.username} ({self.email})>'

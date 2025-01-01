@@ -290,3 +290,33 @@ class CartService:
             current_app.logger.error(f"Error clearing cart: {str(e)}")
             db.session.rollback()
             return None, str(e)
+
+    @staticmethod
+    def get_user_cart_items_by_cart_id(user_id, cart_id):
+        """
+        Get cart items for a specific cart belonging to the user
+        
+        Args:
+            user_id (str): User ID
+            cart_id (str): Cart ID
+            
+        Returns:
+            list: List of cart items or empty list
+        """
+        try:
+            # Find the cart that belongs to the user and matches the cart_id
+            cart = Cart.query.filter_by(
+                id=cart_id,
+                user_id=user_id,
+                status='active'
+            ).first()
+            
+            if not cart:
+                return []
+            
+            # Return cart items
+            return cart.cart_items
+            
+        except Exception as e:
+            current_app.logger.error(f"Error fetching cart items: {str(e)}")
+            return []

@@ -26,18 +26,16 @@ class Book(db.Model):
     language = db.Column(db.String(50), nullable=True)
     
     # Relationships
+    author_id = db.Column(db.String(36), db.ForeignKey('authors.id'), nullable=False)
+    author = db.relationship('Author', back_populates='authored_books')
+    
     category_id = db.Column(db.String(36), db.ForeignKey('book_categories.id'), nullable=False)
-    category = db.relationship('BookCategory', backref=db.backref('books', lazy=True))
+    category = db.relationship('BookCategory', backref='books')
     
-    #Relationship to configuration
-    author_id = db.Column(db.String(36), db.ForeignKey('authors.id'), nullable=True)
-    author = db.relationship('Author', 
-        back_populates='authored_books',  
-        foreign_keys=[author_id]
-    )
-    
-    # Cart relationship
     cart_items = db.relationship('CartItem', back_populates='book', lazy='dynamic')
+    
+    # Order relationship
+    order_items = db.relationship('OrderItem', back_populates='book', lazy='dynamic')
     
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
