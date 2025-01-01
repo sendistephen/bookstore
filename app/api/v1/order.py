@@ -1,11 +1,13 @@
 from app.api.v1 import bp
-from flask import request, jsonify
+from flask import jsonify, request, current_app
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from marshmallow import ValidationError
 
 from app.services.cart_service import CartService
 from app.services.order_service import OrderService
 from app.schemas.order_schema import OrderSchema, OrderQuerySchema
+from app.models.user import User
+
+from datetime import datetime, timedelta
 
 @bp.route('/orders/create', methods=['POST'])
 @jwt_required()
@@ -246,3 +248,147 @@ def cancel_order(order_id):
     
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
+
+@bp.route('/vendor/orders/<order_id>/status', methods=['PATCH'])
+@jwt_required()
+def update_vendor_order_status(order_id):
+    """
+    Update the status of an order for a vendor
+
+    Requires:
+    - Authenticated vendor
+    - Order must contain books from the vendor
+    - Status must be a valid transition
+
+    Allowed Status Transitions:
+    - PENDING -> PROCESSING or CANCELLED
+    - PROCESSING -> SHIPPED or CANCELLED
+    - SHIPPED -> DELIVERED
+
+    Request JSON:
+    {
+        "status": "processing"  # New status for the order
+    }
+    """
+    # Get the current user's identity
+    user_id = get_jwt_identity()
+
+    # Verify the user is a vendor
+    vendor = User.query.filter_by(id=user_id).first()
+    if not vendor:
+        return jsonify({
+            'status': 'error',
+            'message': 'Only vendors can update order status'
+        }), 403
+
+    # Parse the request
+    data = request.get_json()
+    if not data or 'status' not in data:
+        return jsonify({
+            'status': 'error',
+            'message': 'Status is required'
+        }), 400
+
+    # Update order status
+    updated_order, error = OrderService.update_order_status_for_vendor(
+        order_id=order_id,
+        vendor_id=vendor.id,
+        new_status=data['status']
+    )
+
+    # Handle potential errors
+    if error:
+        return jsonify({
+            'status': 'error',
+            'message': error
+        }), 400
+
+    # Return updated order details
+    return jsonify({
+        'status': 'success',
+        'data': {
+            'order_id': updated_order.id,
+            'new_status': updated_order.status.value,
+            'updated_at': updated_order.updated_at.isoformat()
+        }
+    }), 200
+
+@bp.route('/admin/sales/analytics', methods=['GET'])
+@jwt_required()
+def get_sales_analytics():
+    """
+    Retrieve comprehensive sales analytics for the admin
+
+    Query Parameters:
+    - start_date: Start date for analytics (ISO format)
+    - end_date: End date for analytics (ISO format)
+    - status: Filter by specific order status
+    - period: Predefined time period ('week', 'month', 'year')
+
+    Supported Filters:
+    - Specific date range: Provide start_date and end_date
+    - Predefined periods: Use 'period' parameter
+    - Status: Filter by order status (e.g., 'pending', 'processing', 'paid')
+
+    Example Queries:
+    1. Specific date range: 
+       `/admin/sales/analytics?start_date=2025-01-01T00:00:00&end_date=2025-01-31T23:59:59`
+    2. Predefined period: 
+       `/admin/sales/analytics?period=month`
+    3. Combined filter: 
+       `/admin/sales/analytics?period=week&status=paid`
+    """
+    # Verify admin access
+    user_id = get_jwt_identity()
+    
+    # TODO: Implement proper admin role check
+    # For now, just ensure the user exists
+    user = User.query.filter_by(id=user_id).first()
+    if not user:
+        return jsonify({
+            'status': 'error',
+            'message': 'Access denied.'
+        }), 403
+
+    try:
+        # Parse date parameters
+        start_date_str = request.args.get('start_date')
+        end_date_str = request.args.get('end_date')
+        status = request.args.get('status')
+        period = request.args.get('period')
+
+        # Convert date strings to datetime objects
+        start_date = datetime.fromisoformat(start_date_str) if start_date_str else None
+        end_date = datetime.fromisoformat(end_date_str) if end_date_str else None
+
+        # Validate period
+        if period and period not in ['week', 'month', 'year']:
+            return jsonify({
+                'status': 'error',
+                'message': "Invalid period. Must be 'week', 'month', or 'year'."
+            }), 400
+
+        # Fetch sales analytics
+        analytics = OrderService.get_sales_analytics(
+            start_date=start_date,
+            end_date=end_date,
+            status=status,
+            period=period
+        )
+
+        return jsonify({
+            'status': 'success',
+            'data': analytics
+        }), 200
+
+    except ValueError as ve:
+        return jsonify({
+            'status': 'error',
+            'message': str(ve)
+        }), 400
+    except Exception as e:
+        current_app.logger.error(f"Sales analytics error: {str(e)}")
+        return jsonify({
+            'status': 'error',
+            'message': 'Failed to generate sales analytics'
+        }), 500

@@ -1,12 +1,12 @@
-from typing import List, Dict, Optional, Any, Tuple
+from flask import current_app
 from app.extensions import db
 from app.models.order import Order, OrderItem, OrderStatus, PaymentMethod
 from app.models.book import Book
-from app.models.user import User
+from app.models.book_category import BookCategory
 from app.services.notification_service import NotificationService
 from datetime import datetime, timedelta
-import math
-from flask import current_app
+from sqlalchemy import func, text
+from typing import Dict, Any, Optional, Tuple, List
 
 class OrderService:
     @staticmethod
@@ -103,76 +103,15 @@ class OrderService:
         return query.order_by(Order.created_at.desc()).all()
 
     @staticmethod
-    def _get_date_range(date_filter: Optional[str]) -> Tuple[Optional[datetime], Optional[datetime]]:
-        """
-        Convert date filter string to start and end datetime
-        
-        Supported filters:
-        - 'today': Orders from the start of today
-        - 'yesterday': Orders from yesterday
-        - 'today_and_yesterday': Orders from yesterday and today
-        - '3days': Orders from 3 days ago
-        - '7days': Orders from 7 days ago
-        - '30days': Orders from 30 days ago
-        
-        Args:
-            date_filter (Optional[str]): Date range filter
-        
-        Returns:
-            Tuple of (start_date, end_date)
-        """
-        if not date_filter:
-            return None, None
-        
-        # Use the current time from the system
-        now = datetime.now()
-        
-        # Reset time to start of day
-        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-        
-        date_ranges = {
-            'today': (today_start, now),
-            'yesterday': (
-                today_start - timedelta(days=1), 
-                today_start
-            ),
-            'today_and_yesterday': (
-                today_start - timedelta(days=1), 
-                now
-            ),
-            '3days': (
-                today_start - timedelta(days=3), 
-                now
-            ),
-            '7days': (
-                today_start - timedelta(days=7), 
-                now
-            ),
-            '30days': (
-                today_start - timedelta(days=30), 
-                now
-            )
-        }
-        
-        # Validate and return date range
-        if date_filter.lower() not in date_ranges:
-            raise ValueError(f"Invalid date filter. Must be one of: {', '.join(date_ranges.keys())}")
-        
-        return date_ranges[date_filter.lower()]
-
-    @staticmethod
     def get_all_user_orders(
         user_id: str, 
         page: int = 1, 
         per_page: int = 10,
         sort_by: str = 'created_at',
-        order: str = 'desc',
-        status: Optional[str] = None,
-        payment_method: Optional[str] = None,
-        date_filter: Optional[str] = None
+        order: str = 'desc'
     ) -> Tuple[List[Order], int, Optional[str]]:
         """
-        Retrieve all orders for a specific user with advanced filtering and pagination
+        Retrieve all orders for a specific user with pagination
         
         Args:
             user_id (str): ID of the user
@@ -180,9 +119,6 @@ class OrderService:
             per_page (int, optional): Number of orders per page. Defaults to 10.
             sort_by (str, optional): Field to sort by. Defaults to 'created_at'.
             order (str, optional): Sort order ('asc' or 'desc'). Defaults to 'desc'.
-            status (Optional[str]): Filter by order status
-            payment_method (Optional[str]): Filter by payment method
-            date_filter (Optional[str]): Filter by date range
         
         Returns:
             Tuple containing:
@@ -199,41 +135,14 @@ class OrderService:
             if order not in ['asc', 'desc']:
                 return [], 0, "Invalid order. Must be 'asc' or 'desc'"
             
-            # Base query for user's orders
-            query = db.session.query(Order).filter(Order.user_id == user_id)
-            
-            # Apply status filter
-            if status:
-                try:
-                    status_enum = OrderStatus(status.lower())
-                    query = query.filter(Order.status == status_enum)
-                except ValueError:
-                    return [], 0, f"Invalid status. Must be one of: {', '.join([s.value for s in OrderStatus])}"
-            
-            # Apply payment method filter
-            if payment_method:
-                try:
-                    payment_method_enum = PaymentMethod(payment_method.lower())
-                    query = query.filter(Order.payment_method == payment_method_enum)
-                except ValueError:
-                    return [], 0, f"Invalid payment method. Must be one of: {', '.join([pm.value for pm in PaymentMethod])}"
-            
-            # Apply date range filter
-            if date_filter:
-                try:
-                    start_date, end_date = OrderService._get_date_range(date_filter)
-                    if start_date:
-                        query = query.filter(Order.created_at >= start_date)
-                    if end_date:
-                        query = query.filter(Order.created_at <= end_date)
-                except ValueError as e:
-                    return [], 0, str(e)
-            
             # Determine sort column and direction
             sort_column = getattr(Order, sort_by)
             sort_method = sort_column.desc() if order == 'desc' else sort_column.asc()
             
-            # Count total orders after filtering
+            # Base query for user's orders
+            query = db.session.query(Order).filter(Order.user_id == user_id)
+            
+            # Count total orders
             total_orders = query.count()
             
             # Paginate and order results
@@ -384,3 +293,166 @@ class OrderService:
         db.session.refresh(order)
         
         return order
+
+    @staticmethod
+    def get_sales_analytics(
+        start_date: Optional[datetime] = None, 
+        end_date: Optional[datetime] = None,
+        status: Optional[str] = None,
+        period: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Generate comprehensive sales analytics for the bookstore admin
+
+        Args:
+            start_date (Optional[datetime]): Start date for analytics
+            end_date (Optional[datetime]): End date for analytics
+            status (Optional[str]): Filter by specific order status
+            period (Optional[str]): Predefined time period ('week', 'month', 'year')
+
+        Returns:
+            Dictionary containing various sales metrics
+        """
+        try:
+            # Adjust dates based on period if provided
+            now = datetime.now()
+            if period:
+                if period == 'week':
+                    start_date = now - timedelta(days=7)
+                elif period == 'month':
+                    start_date = now - timedelta(days=30)
+                elif period == 'year':
+                    start_date = now - timedelta(days=365)
+                end_date = now
+
+            # Base query for orders
+            query = db.session.query(Order)
+
+            # Apply date range filter if provided
+            if start_date:
+                query = query.filter(Order.created_at >= start_date)
+            if end_date:
+                query = query.filter(Order.created_at <= end_date)
+
+            # Apply status filter if provided
+            if status:
+                try:
+                    status_enum = OrderStatus(status.lower())
+                    query = query.filter(Order.status == status_enum)
+                except ValueError:
+                    raise ValueError(f"Invalid status. Must be one of: {', '.join([s.value for s in OrderStatus])}")
+
+            # Total sales metrics
+            total_orders = query.count()
+            total_revenue = db.session.query(func.sum(Order.total_amount)).filter(query.whereclause).scalar() or 0
+
+            # Sales by status
+            status_breakdown = (
+                db.session.query(
+                    Order.status, 
+                    func.count(Order.id).label('order_count'),
+                    func.sum(Order.total_amount).label('total_amount')
+                )
+                .filter(query.whereclause)
+                .group_by(Order.status)
+                .all()
+            )
+
+            # Payment method breakdown
+            payment_method_breakdown = (
+                db.session.query(
+                    Order.payment_method, 
+                    func.count(Order.id).label('order_count'),
+                    func.sum(Order.total_amount).label('total_amount')
+                )
+                .filter(query.whereclause)
+                .group_by(Order.payment_method)
+                .all()
+            )
+
+            # Top selling books
+            top_books = (
+                db.session.query(
+                    Book.id.label('book_id'),
+                    Book.title,
+                    Book.author,
+                    BookCategory.name.label('category_name'),
+                    func.sum(OrderItem.quantity).label('total_quantity'),
+                    func.sum(OrderItem.price * OrderItem.quantity).label('total_revenue')
+                )
+                .join(OrderItem, Book.id == OrderItem.book_id)
+                .join(Order, OrderItem.order_id == Order.id)
+                .join(BookCategory, Book.category_id == BookCategory.id)
+                .filter(query.whereclause)
+                .group_by(Book.id, Book.title, Book.author, BookCategory.name)
+                .order_by(text('total_quantity DESC'))
+                .limit(10)
+                .all()
+            )
+
+            # Underperforming books (lowest sales)
+            underperforming_books = (
+                db.session.query(
+                    Book.id.label('book_id'),
+                    Book.title,
+                    Book.author,
+                    BookCategory.name.label('category_name'),
+                    Book.price,
+                    func.sum(OrderItem.quantity).label('total_quantity'),
+                    func.sum(OrderItem.price * OrderItem.quantity).label('total_revenue')
+                )
+                .outerjoin(OrderItem, Book.id == OrderItem.book_id)
+                .outerjoin(Order, OrderItem.order_id == Order.id)
+                .join(BookCategory, Book.category_id == BookCategory.id)
+                .filter(query.whereclause)
+                .group_by(Book.id, Book.title, Book.author, BookCategory.name, Book.price)
+                .order_by(text('total_quantity ASC'))
+                .limit(10)
+                .all()
+            )
+
+            # Prepare the analytics response
+            return {
+                'total_orders': total_orders,
+                'total_revenue': float(total_revenue),
+                'average_order_value': float(total_revenue / total_orders) if total_orders > 0 else 0,
+                'status_breakdown': [
+                    {
+                        'status': str(status),
+                        'order_count': count,
+                        'total_amount': float(amount)
+                    } for status, count, amount in status_breakdown
+                ],
+                'payment_method_breakdown': [
+                    {
+                        'payment_method': str(method),
+                        'order_count': count,
+                        'total_amount': float(amount)
+                    } for method, count, amount in payment_method_breakdown
+                ],
+                'top_selling_books': [
+                    {
+                        'book_id': book_id,
+                        'title': title,
+                        'author': author,
+                        'category': category,
+                        'total_quantity': quantity,
+                        'total_revenue': float(revenue)
+                    } for book_id, title, author, category, quantity, revenue in top_books
+                ],
+                'underperforming_books': [
+                    {
+                        'book_id': book_id,
+                        'title': title,
+                        'author': author,
+                        'category': category,
+                        'price': float(price),
+                        'total_quantity': quantity or 0,
+                        'total_revenue': float(revenue or 0)
+                    } for book_id, title, author, category, price, quantity, revenue in underperforming_books
+                ]
+            }
+
+        except Exception as e:
+            current_app.logger.error(f"Error generating sales analytics: {str(e)}")
+            raise
