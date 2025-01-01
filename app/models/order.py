@@ -29,6 +29,26 @@ class Order(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+    # Billing Information
+    billing_name = db.Column(db.String(100), nullable=True, default='Unknown')
+    billing_email = db.Column(db.String(100), nullable=True, default='')
+    billing_phone = db.Column(db.String(20), nullable=True, default='')
+    billing_street = db.Column(db.String(200), nullable=True, default='')
+    billing_city = db.Column(db.String(100), nullable=True, default='')
+    billing_state = db.Column(db.String(100), nullable=True, default='')
+    billing_postal_code = db.Column(db.String(20), nullable=True, default='')
+    billing_country = db.Column(db.String(100), nullable=True, default='')
+
+    # Shipping Information (if different from billing)
+    shipping_name = db.Column(db.String(100), nullable=True, default='')
+    shipping_email = db.Column(db.String(100), nullable=True, default='')
+    shipping_phone = db.Column(db.String(20), nullable=True, default='')
+    shipping_street = db.Column(db.String(200), nullable=True, default='')
+    shipping_city = db.Column(db.String(100), nullable=True, default='')
+    shipping_state = db.Column(db.String(100), nullable=True, default='')
+    shipping_postal_code = db.Column(db.String(20), nullable=True, default='')
+    shipping_country = db.Column(db.String(100), nullable=True, default='')
+
     # Relationships
     user = db.relationship("User", back_populates="orders")
     order_items = db.relationship("OrderItem", back_populates="order", cascade="all, delete-orphan")

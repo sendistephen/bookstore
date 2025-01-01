@@ -30,8 +30,10 @@ def init_extensions(app):
     
     # Conditionally initialize JWT if imported
     if JWTManager:
-        jwt = JWTManager(app)
+        JWTManager(app)
     
     # Conditionally initialize Session if imported
     if Session and app.config.get('SESSION_TYPE'):
         Session(app)
+
+    return app

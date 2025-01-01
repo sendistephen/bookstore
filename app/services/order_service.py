@@ -5,15 +5,18 @@ from app.models.book import Book
 from app.models.book_category import BookCategory
 from app.services.notification_service import NotificationService
 from datetime import datetime, timedelta
-from sqlalchemy import func, text
+from sqlalchemy import func, text, desc, asc
 from typing import Dict, Any, Optional, Tuple, List
+import logging
 
 class OrderService:
     @staticmethod
     def create_order(
         user_id: str, 
         cart_items: List[Dict[str, Any]], 
-        payment_method: PaymentMethod
+        payment_method: PaymentMethod,
+        billing_info: Dict[str, Any],
+        shipping_info: Optional[Dict[str, Any]] = None
     ) -> Order:
         """
         Create a new order from cart items
@@ -22,6 +25,8 @@ class OrderService:
             user_id (str): ID of the user placing the order
             cart_items (List[Dict]): List of items to order
             payment_method (PaymentMethod): Selected payment method
+            billing_info (Dict): Billing information for the order
+            shipping_info (Optional[Dict]): Optional shipping information
         
         Returns:
             Order: Created order object
@@ -48,27 +53,68 @@ class OrderService:
                 quantity=item['quantity'],
                 price=book.price * item['quantity']
             )
-            order_items.append(order_item)
+            
+            # Update total amount and reduce book stock
             total_amount += order_item.price
-
-            # Update book stock
             book.stock_quantity -= item['quantity']
+            
+            order_items.append(order_item)
 
-        # Create order
+        # Create new order
         order = Order(
             user_id=user_id,
             total_amount=total_amount,
-            status=OrderStatus.PENDING,
             payment_method=payment_method,
-            order_items=order_items
+            status=OrderStatus.PENDING,
+            
+            # Billing Information
+            billing_name=billing_info['name'],
+            billing_email=billing_info['email'],
+            billing_phone=billing_info['phone'],
+            billing_street=billing_info['street'],
+            billing_city=billing_info['city'],
+            billing_state=billing_info.get('state', ''),
+            billing_postal_code=billing_info['postal_code'],
+            billing_country=billing_info['country']
         )
 
-        # Save to database
-        db.session.add(order)
-        db.session.commit()
-        db.session.refresh(order)
+        # Add shipping information if provided
+        if shipping_info:
+            order.shipping_name = shipping_info['name']
+            order.shipping_email = shipping_info['email']
+            order.shipping_phone = shipping_info['phone']
+            order.shipping_street = shipping_info['street']
+            order.shipping_city = shipping_info['city']
+            order.shipping_state = shipping_info.get('state', '')
+            order.shipping_postal_code = shipping_info['postal_code']
+            order.shipping_country = shipping_info['country']
+        else:
+            # Use billing info for shipping if not provided
+            order.shipping_name = billing_info['name']
+            order.shipping_email = billing_info['email']
+            order.shipping_phone = billing_info['phone']
+            order.shipping_street = billing_info['street']
+            order.shipping_city = billing_info['city']
+            order.shipping_state = billing_info.get('state', '')
+            order.shipping_postal_code = billing_info['postal_code']
+            order.shipping_country = billing_info['country']
 
-        return order
+        # Add order items to the order
+        order.order_items = order_items
+
+        # Commit changes
+        try:
+            db.session.add(order)
+            db.session.commit()
+
+            # Send order confirmation email
+            NotificationService.send_order_invoice(order)
+
+            return order
+        except Exception as e:
+            db.session.rollback()
+            logging.error(f"Failed to create order: {str(e)}")
+            raise
 
     @staticmethod
     def get_user_orders(
@@ -108,10 +154,13 @@ class OrderService:
         page: int = 1, 
         per_page: int = 10,
         sort_by: str = 'created_at',
-        order: str = 'desc'
+        order: str = 'desc',
+        status: Optional[str] = None,
+        payment_method: Optional[str] = None,
+        date_filter: Optional[str] = None
     ) -> Tuple[List[Order], int, Optional[str]]:
         """
-        Retrieve all orders for a specific user with pagination
+        Retrieve all orders for a specific user with advanced pagination and filtering
         
         Args:
             user_id (str): ID of the user
@@ -119,6 +168,9 @@ class OrderService:
             per_page (int, optional): Number of orders per page. Defaults to 10.
             sort_by (str, optional): Field to sort by. Defaults to 'created_at'.
             order (str, optional): Sort order ('asc' or 'desc'). Defaults to 'desc'.
+            status (Optional[str]): Filter by order status
+            payment_method (Optional[str]): Filter by payment method
+            date_filter (Optional[str]): Filter by date range
         
         Returns:
             Tuple containing:
@@ -127,36 +179,68 @@ class OrderService:
             - Error message (if any)
         """
         try:
-            # Validate sort_by and order parameters
-            valid_sort_fields = ['created_at', 'total_amount', 'status']
-            if sort_by not in valid_sort_fields:
-                return [], 0, f"Invalid sort_by. Must be one of: {', '.join(valid_sort_fields)}"
-            
-            if order not in ['asc', 'desc']:
-                return [], 0, "Invalid order. Must be 'asc' or 'desc'"
-            
-            # Determine sort column and direction
-            sort_column = getattr(Order, sort_by)
-            sort_method = sort_column.desc() if order == 'desc' else sort_column.asc()
-            
-            # Base query for user's orders
+            # Start with base query
             query = db.session.query(Order).filter(Order.user_id == user_id)
             
-            # Count total orders
+            # Apply status filter
+            if status:
+                try:
+                    status_enum = OrderStatus[status.upper()]
+                    query = query.filter(Order.status == status_enum)
+                except KeyError:
+                    raise ValueError(f"Invalid order status: {status}")
+            
+            # Apply payment method filter
+            if payment_method:
+                try:
+                    payment_method_enum = PaymentMethod[payment_method.upper()]
+                    query = query.filter(Order.payment_method == payment_method_enum)
+                except KeyError:
+                    raise ValueError(f"Invalid payment method: {payment_method}")
+            
+            # Apply date filter
+            if date_filter:
+                now = datetime.utcnow()
+                if date_filter == 'today':
+                    query = query.filter(
+                        Order.created_at >= now.replace(hour=0, minute=0, second=0, microsecond=0)
+                    )
+                elif date_filter == 'yesterday':
+                    yesterday = now - timedelta(days=1)
+                    query = query.filter(
+                        Order.created_at >= yesterday.replace(hour=0, minute=0, second=0, microsecond=0),
+                        Order.created_at < now.replace(hour=0, minute=0, second=0, microsecond=0)
+                    )
+                elif date_filter == 'today_and_yesterday':
+                    yesterday = now - timedelta(days=1)
+                    query = query.filter(
+                        Order.created_at >= yesterday.replace(hour=0, minute=0, second=0, microsecond=0)
+                    )
+                elif date_filter == '3days':
+                    three_days_ago = now - timedelta(days=3)
+                    query = query.filter(Order.created_at >= three_days_ago)
+                elif date_filter == '7days':
+                    seven_days_ago = now - timedelta(days=7)
+                    query = query.filter(Order.created_at >= seven_days_ago)
+                elif date_filter == '30days':
+                    thirty_days_ago = now - timedelta(days=30)
+                    query = query.filter(Order.created_at >= thirty_days_ago)
+                else:
+                    raise ValueError(f"Invalid date filter: {date_filter}")
+            
+            # Apply sorting
+            if order.lower() == 'desc':
+                query = query.order_by(desc(getattr(Order, sort_by)))
+            else:
+                query = query.order_by(asc(getattr(Order, sort_by)))
+            
+            # Apply pagination
             total_orders = query.count()
+            orders = query.offset((page - 1) * per_page).limit(per_page).all()
             
-            # Paginate and order results
-            paginated_orders = (
-                query.order_by(sort_method)
-                .offset((page - 1) * per_page)
-                .limit(per_page)
-                .all()
-            )
-            
-            return paginated_orders, total_orders, None
+            return orders, total_orders, None
         
         except Exception as e:
-            current_app.logger.error(f"Error fetching orders: {str(e)}")
             return [], 0, str(e)
 
     @staticmethod

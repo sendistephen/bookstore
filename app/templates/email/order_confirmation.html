@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ 'Invoice' if order_status != 'paid' else 'Receipt' }} #{{ invoice_details.invoice_number }}</title>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background-color: #ffffff;
+            margin: 0;
+            padding: 0;
+        }
+        .email-container {
+            max-width: 800px;
+            margin: 20px auto;
+            background-color: #ffffff;
+            border: none;
+            box-shadow: none;
+            overflow: hidden;
+        }
+        .header {
+            background-color: #ffffff;
+            color: #333;
+            padding: 20px 0;
+            text-align: center;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 24px;
+            color: #212121;
+        }
+        .content {
+            padding: 20px 0;
+        }
+        .invoice-details {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 20px;
+            border-bottom: 1px solid #e0e0e0;
+            padding-bottom: 20px;
+        }
+        .company-details, .billing-details {
+            width: 45%;
+        }
+        .company-details p, .billing-details p {
+            color: #616161;
+            margin: 5px 0;
+        }
+        .order-items {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+        }
+        .order-items th, .order-items td {
+            border: none;
+            border-bottom: 1px solid #e0e0e0;
+            padding: 12px 0;
+            text-align: left;
+            color: #424242;
+        }
+        .order-items th {
+            background-color: #ffffff;
+            font-weight: bold;
+            color: #212121;
+            border-bottom: 2px solid #212121;
+        }
+        .total {
+            text-align: right;
+            font-weight: bold;
+            padding: 10px 0;
+            border-top: 1px solid #e0e0e0;
+        }
+        .total p {
+            color: #212121;
+            margin: 0;
+        }
+        .book-cover {
+            max-width: 80px;
+            max-height: 120px;
+            border-radius: 4px;
+            border: 1px solid #e0e0e0;
+        }
+        .invoice-meta {
+            margin-bottom: 20px;
+            padding: 15px 0;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        .invoice-meta p {
+            color: #616161;
+            margin: 5px 0;
+        }
+        .footer {
+            text-align: center;
+            padding: 10px 0;
+            font-size: 12px;
+            color: #757575;
+            border-top: 1px solid #e0e0e0;
+        }
+    </style>
+</head>
+<body>
+    <div class="email-container">
+        <div class="header">
+            <h1>{{ 'Invoice' if order_status != 'paid' else 'Receipt' }}</h1>
+        </div>
+        
+        <div class="content">
+            <div class="invoice-meta">
+                <p><strong>{{ 'Invoice' if order_status != 'paid' else 'Receipt' }} Number:</strong> {{ invoice_details.invoice_number }}</p>
+                <p><strong>Date of Issue:</strong> {{ invoice_details.date_of_issue }}</p>
+                {% if order_status != 'paid' %}
+                <p><strong>Date Due:</strong> {{ invoice_details.date_due }}</p>
+                {% endif %}
+            </div>
+            
+            <div class="invoice-details">
+                <div class="company-details">
+                    <h3>{{ company_details.name }}</h3>
+                    <p>{{ company_details.street }}</p>
+                    <p>{{ company_details.city }}, {{ company_details.state }} {{ company_details.postal_code }}</p>
+                    <p>{{ company_details.country }}</p>
+                    <p>Email: {{ company_details.email }}</p>
+                </div>
+                
+                <div class="billing-details">
+                    <h3>Bill To</h3>
+                    <p>{{ billing_address.full_name }}</p>
+                    <p>{{ billing_address.street }}</p>
+                    <p>{{ billing_address.city }}, {{ billing_address.state }} {{ billing_address.postal_code }}</p>
+                    <p>{{ billing_address.country }}</p>
+                    <p>Email: {{ billing_address.email }}</p>
+                    <p>Phone: {{ billing_address.phone }}</p>
+                </div>
+            </div>
+            
+            <table class="order-items">
+                <thead>
+                    <tr>
+                        <th>Book Cover</th>
+                        <th>Book Title</th>
+                        <th>Quantity</th>
+                        <th>Unit Price</th>
+                        <th>Total Price</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in order_items %}
+                    <tr>
+                        <td>
+                            <img src="{{ item.book_cover }}" alt="{{ item.book_name }}" class="book-cover">
+                        </td>
+                        <td>{{ item.book_name }}</td>
+                        <td>{{ item.quantity }}</td>
+                        <td>{{ item.unit_price }}</td>
+                        <td>{{ item.total_price }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            
+            <div class="total">
+                <p>Total Order Amount: {{ total_amount }}</p>
+            </div>
+            
+            {% if order_status != 'paid' %}
+            <p>Please process the payment for this invoice. Thank you for your business.</p>
+            {% else %}
+            <p>Thank you for your purchase. This receipt confirms your payment.</p>
+            {% endif %}
+        </div>
+        
+        <div class="footer">
+            <p> 2025 Bookstore Marketplace. All rights reserved.</p>
+            <p>Questions? Contact our support team.</p>
+        </div>
+    </div>
+</body>
+</html>

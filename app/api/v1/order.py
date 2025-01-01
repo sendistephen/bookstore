@@ -1,6 +1,7 @@
 from app.api.v1 import bp
 from flask import jsonify, request, current_app
 from flask_jwt_extended import jwt_required, get_jwt_identity
+from marshmallow import ValidationError
 
 from app.services.cart_service import CartService
 from app.services.order_service import OrderService
@@ -18,6 +19,8 @@ def create_order():
     Request JSON should contain:
     - payment_method: Payment method for the order
     - cart_id: ID of the cart to create order from
+    - billing_info: Billing information for the order
+    - shipping_info (optional): Shipping information if different from billing
     """
     user_id = get_jwt_identity()
     
@@ -43,11 +46,13 @@ def create_order():
             } for item in cart_items
         ]
         
-        # Create preliminary order
+        # Create order with billing and shipping details
         order = OrderService.create_order(
             user_id=user_id, 
             cart_items=order_items, 
-            payment_method=payload['payment_method']
+            payment_method=payload['payment_method'],
+            billing_info=payload['billing_info'],
+            shipping_info=payload.get('shipping_info')  # Optional
         )
         
         return jsonify({
@@ -160,23 +165,20 @@ def get_all_user_orders():
     """
     user_id = get_jwt_identity()
     
+    # Get query parameters
+    page = request.args.get('page', default=1, type=int)
+    per_page = request.args.get('per_page', default=10, type=int)
+    sort_by = request.args.get('sort_by', default='created_at')
+    order = request.args.get('order', default='desc')
+    
+    # Filtering parameters
+    status = request.args.get('status')
+    payment_method = request.args.get('payment_method')
+    date_filter = request.args.get('date_filter')
+    
     try:
-        # Extract query parameters with defaults
-        page = int(request.args.get('page', 1))
-        per_page = int(request.args.get('per_page', 10))
-        sort_by = request.args.get('sort_by', 'created_at')
-        order = request.args.get('order', 'desc')
-
-        # Filtering parameters
-        status = request.args.get('status')
-        payment_method = request.args.get('payment_method')
-        date_filter = request.args.get('date_filter')
-
-        # Validate per_page
-        per_page = min(max(per_page, 1), 100)
-
-        # Fetch orders
-        orders, total, error = OrderService.get_all_user_orders(
+        # Fetch orders with advanced filtering
+        orders, total_orders, error = OrderService.get_all_user_orders(
             user_id=user_id,
             page=page,
             per_page=per_page,
@@ -187,38 +189,41 @@ def get_all_user_orders():
             date_filter=date_filter
         )
         
+        # If there's an error, return it
         if error:
             return jsonify({
                 'status': 'error',
                 'message': error
             }), 400
-
+        
+        # Serialize orders
+        orders_data = [
+            {
+                'id': order.id,
+                'total_amount': order.total_amount,
+                'status': order.status.value,
+                'payment_method': order.payment_method.value,
+                'created_at': order.created_at.isoformat(),
+                'order_items': [
+                    {
+                        'book_id': item.book_id,
+                        'quantity': item.quantity,
+                        'price': item.price
+                    } for item in order.order_items
+                ]
+            } for order in orders
+        ]
+        
         return jsonify({
             'status': 'success',
             'data': {
-                'orders': [
-                    {
-                        "id": order.id,
-                        "total_amount": order.total_amount,
-                        "status": order.status.value,
-                        "created_at": order.created_at.isoformat(),
-                        "payment_method": order.payment_method.value,
-                        "items": [
-                            {
-                                "book_id": item.book_id,
-                                "quantity": item.quantity,
-                                "price": item.price
-                            } for item in order.order_items
-                        ]
-                    } for order in orders
-                ],
-                'total': total,
+                'orders': orders_data,
+                'total_orders': total_orders,
                 'page': page,
-                'per_page': per_page,
-                'total_pages': (total + per_page - 1) // per_page
+                'per_page': per_page
             }
         }), 200
-
+    
     except Exception as e:
         current_app.logger.error(f"Error fetching orders: {str(e)}")
         return jsonify({
