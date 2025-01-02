@@ -70,7 +70,7 @@
 			"response": []
 		},
 		{
-			"name": "3. Create Order (On Delivery)",
+			"name": "3. Create Order (Minimal Fields)",
 			"request": {
 				"method": "POST",
 				"header": [
@@ -82,7 +82,7 @@
 				],
 				"body": {
 					"mode": "raw",
-					"raw": "{\n    \"payment_method\": \"order_on_delivery\"\n}",
+					"raw": "{\n    \"payment_method\": \"order_on_delivery\",\n    \"cart_id\": \"cart_uuid_here\",\n    \"billing_info\": {\n        \"name\": \"Okello Musisi\",\n        \"email\": \"okello.musisi@example.ug\",\n        \"phone\": \"+256772123456\",\n        \"country\": \"Uganda\"\n    }\n}",
 					"options": {
 						"raw": {
 							"language": "json"
@@ -105,7 +105,42 @@
 			"response": []
 		},
 		{
-			"name": "4. Process Order (On Delivery)",
+			"name": "4. Create Order (Full Details)",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{jwt_token}}",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"payment_method\": \"order_on_delivery\",\n    \"cart_id\": \"cart_uuid_here\",\n    \"billing_info\": {\n        \"name\": \"Okello Musisi\",\n        \"email\": \"okello.musisi@example.ug\",\n        \"phone\": \"+256772123456\",\n        \"street\": \"Plot 15, Kampala Road\",\n        \"city\": \"Kampala\",\n        \"state\": \"Central Region\",\n        \"postal_code\": \"256\",\n        \"country\": \"Uganda\"\n    },\n    \"shipping_info\": {\n        \"name\": \"Okello Musisi\",\n        \"email\": \"okello.musisi@example.ug\",\n        \"phone\": \"+256772123456\",\n        \"street\": \"Plot 15, Kampala Road\",\n        \"city\": \"Kampala\",\n        \"state\": \"Central Region\",\n        \"postal_code\": \"256\",\n        \"country\": \"Uganda\"\n    }\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{base_url}}/api/v1/orders/create",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"api",
+						"v1",
+						"orders",
+						"create"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "5. Process Order (On Delivery)",
 			"request": {
 				"method": "POST",
 				"header": [
@@ -136,6 +171,60 @@
 						"process-payment"
 					]
 				}
+			},
+			"response": []
+		},
+		{
+			"name": "6. Update Order Status to Paid",
+			"request": {
+				"method": "PATCH",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{jwt_token}}",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"status\": \"paid\",\n    \"transaction_id\": \"{{transaction_id}}\",\n    \"payment_method\": \"mobile_money\",\n    \"payment_details\": {\n        \"phone_number\": \"+256772123456\",\n        \"network\": \"MTN Mobile Money\",\n        \"amount\": {{total_amount}},\n        \"currency\": \"UGX\"\n    }\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{base_url}}/api/v1/orders/{{order_id}}/status",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"api",
+						"v1",
+						"orders",
+						"{{order_id}}",
+						"status"
+					]
+				},
+				"description": "Update order status to paid\n\nPre-request Script:\n1. Select an order from the list\n2. Set order_id\n3. Generate unique transaction_id\n4. Use order's total_amount\n\nRequired Parameters:\n- status: Must be 'paid'\n- transaction_id: Unique transaction identifier\n- payment_method: Payment method used\n- payment_details: Additional payment information",
+				"event": [
+					{
+						"listen": "prerequest",
+						"script": {
+							"type": "text/javascript",
+							"exec": [
+								"// Generate a unique transaction ID",
+								"const orderId = pm.variables.get('order_id');",
+								"const timestamp = new Date().getTime();",
+								"const transactionId = `MTN_MoMo_${orderId.substring(0, 8)}_${timestamp}`;",
+								"",
+								"// Set variables for the request",
+								"pm.variables.set('transaction_id', transactionId);"
+							]
+						}
+					}
+				]
 			},
 			"response": []
 		}

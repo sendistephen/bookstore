@@ -65,3 +65,27 @@ class OrderItem(db.Model):
     # Relationships
     order = db.relationship("Order", back_populates="order_items")
     book = db.relationship("Book", back_populates="order_items")
+
+class OrderStatusChangeLog(db.Model):
+    """
+    Audit log for order status changes made by admins
+    """
+    __tablename__ = 'order_status_change_logs'
+    
+    id = db.Column(db.String(36), primary_key=True, default=lambda: str(uuid.uuid4()), index=True)
+    order_id = db.Column(db.String(36), db.ForeignKey('orders.id'), nullable=False, index=True)
+    admin_id = db.Column(db.String(36), db.ForeignKey('users.id'), nullable=False, index=True)
+    
+    previous_status = db.Column(db.String(50), nullable=False)
+    new_status = db.Column(db.String(50), nullable=False)
+    
+    reason = db.Column(db.Text, nullable=True)
+    
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+    
+    # Relationships
+    order = db.relationship('Order', backref=db.backref('status_change_logs', lazy='dynamic'))
+    admin = db.relationship('User', backref=db.backref('order_status_changes', lazy='dynamic'))
+    
+    def __repr__(self):
+        return f'<OrderStatusChangeLog {self.id}: {self.previous_status} -> {self.new_status}>'

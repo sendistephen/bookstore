@@ -1,6 +1,6 @@
 from flask import current_app
 from app.extensions import db
-from app.models.order import Order, OrderItem, OrderStatus, PaymentMethod
+from app.models.order import Order, OrderItem, OrderStatus, PaymentMethod, OrderStatusChangeLog
 from app.models.book import Book
 from app.models.book_category import BookCategory
 from app.services.notification_service import NotificationService
@@ -34,6 +34,9 @@ class OrderService:
         Raises:
             ValueError: If cart is empty or items are invalid
         """
+        # Log input parameters for debugging
+        logging.info(f"Creating new order - User ID: {user_id}, Cart Items: {cart_items}, Payment Method: {payment_method}, Billing Info: {billing_info}, Shipping Info: {shipping_info}")
+        
         # Calculate total amount and validate items
         total_amount = 0
         order_items = []
@@ -41,10 +44,12 @@ class OrderService:
         for item in cart_items:
             book = db.session.query(Book).get(item['book_id'])
             if not book:
+                logging.error(f"Book with ID {item['book_id']} not found")
                 raise ValueError(f"Book with ID {item['book_id']} not found")
             
             # Validate quantity against available stock
             if book.stock_quantity < item['quantity']:
+                logging.error(f"Insufficient stock for book {book.title}")
                 raise ValueError(f"Insufficient stock for book {book.title}")
 
             # Create order item
@@ -109,7 +114,7 @@ class OrderService:
 
             # Send order confirmation email
             NotificationService.send_order_invoice(order)
-
+            logging.info(f"Order created successfully. Order ID: {order.id}")
             return order
         except Exception as e:
             db.session.rollback()
@@ -134,6 +139,9 @@ class OrderService:
         Raises:
             ValueError: If an invalid status is provided
         """
+        # Log input parameters for debugging
+        logging.info(f"Retrieving user orders - User ID: {user_id}, Status: {status}")
+        
         query = db.session.query(Order).filter(Order.user_id == user_id)
         
         if status:
@@ -144,89 +152,105 @@ class OrderService:
             except ValueError:
                 # Provide a clear error message with valid status options
                 valid_statuses = [s.value for s in OrderStatus]
+                logging.error(f"Invalid status: {status}. Valid statuses: {valid_statuses}")
                 raise ValueError(f"Invalid status. Must be one of: {', '.join(valid_statuses)}")
         
-        return query.order_by(Order.created_at.desc()).all()
+        orders = query.order_by(Order.created_at.desc()).all()
+        logging.info(f"Retrieved user orders. Order count: {len(orders)}")
+        return orders
 
     @staticmethod
-    def get_all_user_orders(
+    def get_user_order_history(
         user_id: str, 
         page: int = 1, 
-        per_page: int = 10,
-        sort_by: str = 'created_at',
-        order: str = 'desc',
-        status: Optional[str] = None,
-        payment_method: Optional[str] = None,
-        date_filter: Optional[str] = None
-    ) -> Tuple[List[Order], int, Optional[str]]:
+        per_page: int = 10
+    ) -> Tuple[List[Dict[str, Any]], int]:
         """
-        Retrieve all orders for a specific user with advanced pagination and filtering
+        Retrieve simplified order history for a user
         
         Args:
             user_id (str): ID of the user
             page (int, optional): Page number for pagination. Defaults to 1.
             per_page (int, optional): Number of orders per page. Defaults to 10.
-            sort_by (str, optional): Field to sort by. Defaults to 'created_at'.
-            order (str, optional): Sort order ('asc' or 'desc'). Defaults to 'desc'.
-            status (Optional[str]): Filter by order status
-            payment_method (Optional[str]): Filter by payment method
-            date_filter (Optional[str]): Filter by date range
         
         Returns:
             Tuple containing:
-            - List of orders for the current page
+            - List of simplified order details
+            - Total number of orders
+        """
+        try:
+            # Base query for user's orders
+            query = db.session.query(Order).filter(Order.user_id == user_id)
+            
+            # Count total orders
+            total_orders = query.count()
+            
+            # Retrieve orders with pagination, sorted by most recent first
+            orders = (query.order_by(Order.created_at.desc())
+                      .offset((page - 1) * per_page)
+                      .limit(per_page)
+                      .all())
+            
+            # Simplify order details for UI
+            simplified_orders = [
+                {
+                    "id": order.id,
+                    "total_amount": order.total_amount,
+                    "status": order.status.value,
+                    "created_at": order.created_at.isoformat(),
+                    "items_count": len(order.order_items)
+                } for order in orders
+            ]
+            
+            logging.info(f"Retrieved user order history. User ID: {user_id}, Total Orders: {total_orders}")
+            
+            return simplified_orders, total_orders
+        
+        except Exception as e:
+            logging.error(f"Failed to retrieve user order history: {str(e)}")
+            raise ValueError(f"Failed to retrieve order history: {str(e)}")
+
+    @staticmethod
+    def get_all_orders_admin(
+        page: int = 1, 
+        per_page: int = 10,
+        sort_by: str = 'created_at',
+        order: str = 'desc',
+        status: Optional[str] = None,
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None
+    ) -> Tuple[List[Dict[str, Any]], int, Optional[str]]:
+        """
+        Retrieve comprehensive order list for admin with advanced filtering
+        
+        Args:
+            page (int, optional): Page number for pagination. Defaults to 1.
+            per_page (int, optional): Number of orders per page. Defaults to 10.
+            sort_by (str, optional): Field to sort by. Defaults to 'created_at'.
+            order (str, optional): Sort order ('asc' or 'desc'). Defaults to 'desc'.
+            status (Optional[str]): Filter by order status
+            start_date (Optional[datetime]): Filter orders from this date
+            end_date (Optional[datetime]): Filter orders up to this date
+        
+        Returns:
+            Tuple containing:
+            - List of detailed order information
             - Total number of orders
             - Error message (if any)
         """
         try:
             # Start with base query
-            query = db.session.query(Order).filter(Order.user_id == user_id)
+            query = db.session.query(Order)
             
-            # Apply status filter
+            # Apply status filter if provided
             if status:
-                try:
-                    status_enum = OrderStatus[status.upper()]
-                    query = query.filter(Order.status == status_enum)
-                except KeyError:
-                    raise ValueError(f"Invalid order status: {status}")
+                query = query.filter(Order.status == OrderStatus[status.upper()])
             
-            # Apply payment method filter
-            if payment_method:
-                try:
-                    payment_method_enum = PaymentMethod[payment_method.upper()]
-                    query = query.filter(Order.payment_method == payment_method_enum)
-                except KeyError:
-                    raise ValueError(f"Invalid payment method: {payment_method}")
-            
-            # Apply date filter
-            if date_filter:
-                now = datetime.utcnow()
-                if date_filter == 'today':
-                    query = query.filter(
-                        Order.created_at >= now.replace(hour=0, minute=0, second=0, microsecond=0)
-                    )
-                elif date_filter == 'yesterday':
-                    yesterday = now - timedelta(days=1)
-                    query = query.filter(
-                        Order.created_at >= yesterday.replace(hour=0, minute=0, second=0, microsecond=0),
-                        Order.created_at < now.replace(hour=0, minute=0, second=0, microsecond=0)
-                    )
-                elif date_filter == 'today_and_yesterday':
-                    yesterday = now - timedelta(days=1)
-                    query = query.filter(
-                        Order.created_at >= yesterday.replace(hour=0, minute=0, second=0, microsecond=0)
-                    )
-                elif date_filter == '3days':
-                    three_days_ago = now - timedelta(days=3)
-                    query = query.filter(Order.created_at >= three_days_ago)
-                elif date_filter == '7days':
-                    seven_days_ago = now - timedelta(days=7)
-                    query = query.filter(Order.created_at >= seven_days_ago)
-                elif date_filter == '30days':
-                    thirty_days_ago = now - timedelta(days=30)
-                    query = query.filter(Order.created_at >= thirty_days_ago)
-                else:
-                    raise ValueError(f"Invalid date filter: {date_filter}")
+            # Apply date range filter
+            if start_date:
+                query = query.filter(Order.created_at >= start_date)
+            if end_date:
+                query = query.filter(Order.created_at <= end_date)
             
             # Apply sorting
             if order.lower() == 'desc':
@@ -234,45 +258,109 @@ class OrderService:
             else:
                 query = query.order_by(asc(getattr(Order, sort_by)))
             
-            # Apply pagination
+            # Count total orders
             total_orders = query.count()
-            orders = query.offset((page - 1) * per_page).limit(per_page).all()
             
-            return orders, total_orders, None
+            # Apply pagination
+            orders = (query.offset((page - 1) * per_page)
+                      .limit(per_page)
+                      .all())
+            
+            # Prepare detailed order information
+            detailed_orders = [
+                {
+                    "id": order.id,
+                    "user_id": order.user_id,
+                    "total_amount": order.total_amount,
+                    "status": order.status.value,
+                    "payment_method": order.payment_method.value if order.payment_method else None,
+                    "created_at": order.created_at.isoformat(),
+                    "updated_at": order.updated_at.isoformat(),
+                    "items_count": len(order.order_items),
+                    "billing_name": order.billing_name,
+                    "shipping_status": order.status.name
+                } for order in orders
+            ]
+            
+            logging.info(f"Retrieved admin orders. Total Orders: {total_orders}")
+            
+            return detailed_orders, total_orders, None
         
         except Exception as e:
+            logging.error(f"Failed to retrieve admin orders: {str(e)}")
             return [], 0, str(e)
 
     @staticmethod
-    def update_order_status(
-        order_id: int, 
-        new_status: OrderStatus
+    def admin_update_order_status(
+        admin_id: str, 
+        order_id: str, 
+        new_status: str,
+        reason: Optional[str] = None
     ) -> Order:
         """
-        Update the status of an existing order
+        Update the status of an order by an admin with comprehensive validation
         
         Args:
-            order_id (int): ID of the order to update
-            new_status (OrderStatus): New status for the order
+            admin_id (str): ID of the admin updating the order
+            order_id (str): ID of the order to update
+            new_status (str): New status for the order
+            reason (Optional[str]): Reason for status change (for audit trail)
         
         Returns:
-            Order: Updated order
+            Order: Updated order object
         
         Raises:
-            ValueError: If order not found
+            ValueError: If order is not found or status is invalid
         """
-        order = db.session.query(Order).get(order_id)
+        # Validate input parameters
+        if not new_status or not isinstance(new_status, str):
+            logging.error("Status must be a non-empty string")
+            raise ValueError("Status must be a non-empty string")
+        
+        try:
+            # Convert string status to enum, using uppercase
+            new_status_enum = OrderStatus[new_status.upper()]
+            logging.info(f"Converted status to enum: {new_status_enum}")
+        except KeyError:
+            valid_statuses = [s.name for s in OrderStatus]
+            logging.error(f"Invalid status: {new_status}. Valid statuses: {valid_statuses}")
+            raise ValueError(f"Invalid status. Must be one of: {', '.join(valid_statuses)}")
+        
+        # Find the order
+        order = db.session.query(Order).filter(Order.id == order_id).first()
         
         if not order:
+            logging.error(f"Order not found. Order ID: {order_id}")
             raise ValueError("Order not found")
         
-        order.status = new_status
+        # Store previous status for audit
+        previous_status = order.status
+        
+        # Update order status
+        order.status = new_status_enum
         order.updated_at = datetime.utcnow()
         
-        db.session.commit()
-        db.session.refresh(order)
-        
-        return order
+        try:
+            # Create an audit log entry
+            audit_log = OrderStatusChangeLog(
+                order_id=order.id,
+                admin_id=admin_id,
+                previous_status=previous_status.value,
+                new_status=new_status_enum.value,
+                reason=reason
+            )
+            db.session.add(audit_log)
+            
+            db.session.commit()
+            db.session.refresh(order)
+            
+            logging.info(f"Admin order status update. Order ID: {order.id}, Previous Status: {previous_status.name}, New Status: {new_status_enum.name}")
+            
+            return order
+        except Exception as e:
+            db.session.rollback()
+            logging.error(f"Failed to update order status by admin: {str(e)}")
+            raise ValueError("Failed to update order status")
 
     @staticmethod
     def process_payment(
@@ -289,12 +377,17 @@ class OrderService:
         Returns:
             Order: Processed order
         """
+        # Log input parameters for debugging
+        logging.info(f"Processing payment - Order ID: {order_id}, Payment Transaction ID: {payment_transaction_id}")
+        
         order = db.session.query(Order).get(order_id)
         
         if not order:
+            logging.error(f"Order not found. Order ID: {order_id}")
             raise ValueError("Order not found")
         
         if order.status != OrderStatus.PENDING:
+            logging.error(f"Order cannot be paid. Order ID: {order_id}, Status: {order.status.name}")
             raise ValueError("Order cannot be paid")
         
         try:
@@ -334,12 +427,13 @@ class OrderService:
         except Exception as e:
             # Rollback in case of any processing error
             db.session.rollback()
+            logging.error(f"Payment processing failed: {str(e)}")
             raise ValueError(f"Payment processing failed: {str(e)}")
         
         order.updated_at = datetime.utcnow()
         db.session.commit()
         db.session.refresh(order)
-        
+        logging.info(f"Payment processed successfully. Order ID: {order.id}, Status: {order.status.name}")
         return order
 
     @staticmethod
@@ -356,13 +450,18 @@ class OrderService:
         Raises:
             ValueError: If order cannot be cancelled
         """
+        # Log input parameters for debugging
+        logging.info(f"Cancelling order - Order ID: {order_id}")
+        
         order = db.session.query(Order).get(order_id)
         
         if not order:
+            logging.error(f"Order not found. Order ID: {order_id}")
             raise ValueError("Order not found")
         
         # Only allow cancellation of pending or processing orders
         if order.status not in [OrderStatus.PENDING, OrderStatus.PROCESSING]:
+            logging.error(f"Order cannot be cancelled. Order ID: {order_id}, Status: {order.status.name}")
             raise ValueError("Order cannot be cancelled")
         
         # Restore book stock
@@ -375,7 +474,7 @@ class OrderService:
         
         db.session.commit()
         db.session.refresh(order)
-        
+        logging.info(f"Order cancelled successfully. Order ID: {order.id}, Status: {order.status.name}")
         return order
 
     @staticmethod
@@ -397,6 +496,9 @@ class OrderService:
         Returns:
             Dictionary containing various sales metrics
         """
+        # Log input parameters for debugging
+        logging.info(f"Generating sales analytics - Start Date: {start_date}, End Date: {end_date}, Status: {status}, Period: {period}")
+        
         try:
             # Adjust dates based on period if provided
             now = datetime.now()
@@ -424,7 +526,8 @@ class OrderService:
                     status_enum = OrderStatus(status.lower())
                     query = query.filter(Order.status == status_enum)
                 except ValueError:
-                    raise ValueError(f"Invalid status. Must be one of: {', '.join([s.value for s in OrderStatus])}")
+                    logging.error(f"Invalid status: {status}")
+                    raise ValueError(f"Invalid status: {status}")
 
             # Total sales metrics
             total_orders = query.count()
@@ -496,7 +599,7 @@ class OrderService:
             )
 
             # Prepare the analytics response
-            return {
+            analytics = {
                 'total_orders': total_orders,
                 'total_revenue': float(total_revenue),
                 'average_order_value': float(total_revenue / total_orders) if total_orders > 0 else 0,
@@ -536,7 +639,9 @@ class OrderService:
                     } for book_id, title, author, category, price, quantity, revenue in underperforming_books
                 ]
             }
+            logging.info(f"Generated sales analytics successfully")
+            return analytics
 
         except Exception as e:
-            current_app.logger.error(f"Error generating sales analytics: {str(e)}")
+            logging.error(f"Failed to generate sales analytics: {str(e)}")
             raise
