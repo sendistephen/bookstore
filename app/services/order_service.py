@@ -1,13 +1,15 @@
+from uuid import UUID
 from flask import current_app
+from sqlalchemy.exc import SQLAlchemyError
 from app.extensions import db
 from app.models.order import Order, OrderItem, OrderStatus, PaymentMethod, OrderStatusChangeLog
 from app.models.book import Book
 from app.models.book_category import BookCategory
 from app.services.notification_service import NotificationService
 from datetime import datetime, timedelta
-from sqlalchemy import func, text, desc, asc
-from typing import Dict, Any, Optional, Tuple, List
 import logging
+from typing import Optional, List, Dict, Any
+from sqlalchemy import desc, asc, func, text
 
 class OrderService:
     @staticmethod
@@ -160,11 +162,11 @@ class OrderService:
         return orders
 
     @staticmethod
-    def get_user_order_history(
+    def get_customer_orders(
         user_id: str, 
         page: int = 1, 
         per_page: int = 10
-    ) -> Tuple[List[Dict[str, Any]], int]:
+    ) -> tuple[List[Dict[str, Any]], int]:
         """
         Retrieve simplified order history for a user
         
@@ -174,7 +176,7 @@ class OrderService:
             per_page (int, optional): Number of orders per page. Defaults to 10.
         
         Returns:
-            Tuple containing:
+            tuple containing:
             - List of simplified order details
             - Total number of orders
         """
@@ -204,11 +206,13 @@ class OrderService:
             
             logging.info(f"Retrieved user order history. User ID: {user_id}, Total Orders: {total_orders}")
             
-            return simplified_orders, total_orders
+            return simplified_orders, total_orders, None
         
         except Exception as e:
-            logging.error(f"Failed to retrieve user order history: {str(e)}")
-            raise ValueError(f"Failed to retrieve order history: {str(e)}")
+            error_message = f"Failed to retrieve user order history: {str(e)}"
+            current_app.logger.error(error_message)
+            logging.error(error_message)
+            return None, 0, error_message
 
     @staticmethod
     def get_all_orders_admin(
@@ -219,7 +223,7 @@ class OrderService:
         status: Optional[str] = None,
         start_date: Optional[datetime] = None,
         end_date: Optional[datetime] = None
-    ) -> Tuple[List[Dict[str, Any]], int, Optional[str]]:
+    ) -> tuple[List[Dict[str, Any]], int, Optional[str]]:
         """
         Retrieve comprehensive order list for admin with advanced filtering
         
@@ -233,7 +237,7 @@ class OrderService:
             end_date (Optional[datetime]): Filter orders up to this date
         
         Returns:
-            Tuple containing:
+            tuple containing:
             - List of detailed order information
             - Total number of orders
             - Error message (if any)
@@ -380,7 +384,7 @@ class OrderService:
         # Log input parameters for debugging
         logging.info(f"Processing payment - Order ID: {order_id}, Payment Transaction ID: {payment_transaction_id}")
         
-        order = db.session.query(Order).get(order_id)
+        order = db.session.query(Order).filter_by(id=order_id).one_or_none()
         
         if not order:
             logging.error(f"Order not found. Order ID: {order_id}")
@@ -399,7 +403,7 @@ class OrderService:
                 # Reserve stock for delivery
                 for item in order.order_items:
                     book = db.session.query(Book).get(item.book_id)
-                    book.reserved_stock -= item.quantity
+                    book.stock_quantity -= item.quantity
             else:
                 # Existing payment processing logic
                 payment_successful = True  # Mock payment success
@@ -412,8 +416,7 @@ class OrderService:
                     # Finalize stock reduction
                     for item in order.order_items:
                         book = db.session.query(Book).get(item.book_id)
-                        book.stock -= item.quantity
-                        book.reserved_stock -= item.quantity
+                        book.stock_quantity -= item.quantity
                     
                     # Send order invoice email
                     NotificationService.send_order_invoice(order)
@@ -422,60 +425,86 @@ class OrderService:
                     order.status = OrderStatus.CANCELLED
                     for item in order.order_items:
                         book = db.session.query(Book).get(item.book_id)
-                        book.reserved_stock -= item.quantity
+                        book.stock_quantity += item.quantity
+        
+            order.updated_at = datetime.utcnow()
+            db.session.commit()
+            db.session.refresh(order)
+            
+            logging.info(f"Payment processed successfully. Order ID: {order.id}, Status: {order.status.name}")
+            return order
         
         except Exception as e:
             # Rollback in case of any processing error
             db.session.rollback()
             logging.error(f"Payment processing failed: {str(e)}")
             raise ValueError(f"Payment processing failed: {str(e)}")
-        
-        order.updated_at = datetime.utcnow()
-        db.session.commit()
-        db.session.refresh(order)
-        logging.info(f"Payment processed successfully. Order ID: {order.id}, Status: {order.status.name}")
-        return order
 
     @staticmethod
-    def cancel_order(order_id: int) -> Order:
+    def cancel_order(order_id:str, user_id: str) -> Order:
         """
         Cancel an existing order and restore book stock
         
         Args:
             order_id (int): ID of the order to cancel
-        
+            user_id (str): ID of the user cancelling the order
+            
         Returns:
             Order: Cancelled order
         
         Raises:
             ValueError: If order cannot be cancelled
         """
-        # Log input parameters for debugging
-        logging.info(f"Cancelling order - Order ID: {order_id}")
+        try:
+            try:
+                # Validate user_id
+                UUID(order_id)
+            except ValueError:
+                logging.error("Invalid order_id format", extra={"order_id": order_id})
+                raise ValueError("Invalid order ID format")
+            
+            logging.info("Cancelling order", extra={"order_id": order_id, "user_id": user_id})
+
+            # Find the order to cancel
+            order = db.session.query(Order).get(order_id)
+            
+            if not order:
+                logging.error("Order not found", extra={"order_id": order_id})
+                raise ValueError("Order not found")
+            
+            # Only allow cancellation by the order's user or admin
+            if order.user_id != user_id:
+                logging.error("Unauthorized cancellation attempt", extra={"order_id": order_id, "user_id": user_id})
+                raise ValueError("Unauthorized cancellation attempt")
+            
+            # Only allow cancellation of pending or processing orders
+            if order.status not in [OrderStatus.PENDING, OrderStatus.PROCESSING]:
+                logging.error(f"Order cannot be cancelled. Order ID: {order_id}, Status: {order.status.name}")
+                raise ValueError("Order cannot be cancelled")
+            
+            # Restore book stock
+            for item in order.order_items:
+                book = db.session.query(Book).filter_by(id=item.book_id).with_for_update().one()
+                book.stock_quantity += item.quantity
+            
+            # Update order status
+            order.status = OrderStatus.CANCELLED
+            order.updated_at = datetime.utcnow()
+            
+            db.session.commit()
+            db.session.refresh(order)
+            logging.info(f"Order cancelled successfully. Order ID: {order.id}, Status: {order.status.name}")
+            return order
         
-        order = db.session.query(Order).get(order_id)
+        except SQLAlchemyError as db_err:
+            db.session.rollback()
+            logging.error(f"Error cancelling order. Order ID: {order_id}, Error: {str(db_err)}")
+            raise ValueError(f"Error cancelling order: {str(db_err)}")
         
-        if not order:
-            logging.error(f"Order not found. Order ID: {order_id}")
-            raise ValueError("Order not found")
-        
-        # Only allow cancellation of pending or processing orders
-        if order.status not in [OrderStatus.PENDING, OrderStatus.PROCESSING]:
-            logging.error(f"Order cannot be cancelled. Order ID: {order_id}, Status: {order.status.name}")
-            raise ValueError("Order cannot be cancelled")
-        
-        # Restore book stock
-        for item in order.order_items:
-            book = db.session.query(Book).get(item.book_id)
-            book.stock += item.quantity
-        
-        order.status = OrderStatus.CANCELLED
-        order.updated_at = datetime.utcnow()
-        
-        db.session.commit()
-        db.session.refresh(order)
-        logging.info(f"Order cancelled successfully. Order ID: {order.id}, Status: {order.status.name}")
-        return order
+        except Exception as e:
+            db.session.rollback()
+            logging.error(f"Error cancelling order. Order ID: {order_id}, Error: {str(e)}")
+            raise ValueError(f"Error cancelling order: {str(e)}")
 
     @staticmethod
     def get_sales_analytics(

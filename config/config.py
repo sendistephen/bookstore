@@ -3,7 +3,7 @@ import secrets
 from typing import Dict, Type
 from dotenv import load_dotenv
 from datetime import timedelta
-from config.payment_config import PaymentMethod, PaymentConfiguration
+from config.payment_config import PaymentConfiguration
 import logging
 
 load_dotenv()
@@ -59,9 +59,10 @@ class Config:
     REDIS_URL: str = os.environ.get('REDIS_URL', f'redis://{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}')
     
     # Session configuration
-    SESSION_TYPE: str = 'filesystem'
-    SESSION_PERMANENT: bool = False
-    SESSION_FILESYSTEM_DIR = '/tmp/flask_session'  # Specify a directory for filesystem sessions
+    SESSION_TYPE = os.environ.get('SESSION_TYPE', 'filesystem')
+    SESSION_FILE_DIR = os.environ.get('SESSION_FILE_DIR', '/tmp/flask_session')
+    SESSION_PERMANENT = False
+    PERMANENT_SESSION_LIFETIME = timedelta(minutes=30)  # Session timeout
     SESSION_FILE_THRESHOLD = 100  # Number of sessions to store before cleaning
     SESSION_FILE_MODE = 0o600  # Secure file permissions
     SESSION_USE_SIGNER: bool = True
@@ -79,6 +80,15 @@ class Config:
     MOBILE_MONEY_MTN_API_KEY = os.getenv('MOBILE_MONEY_MTN_API_KEY', '')
     MOBILE_MONEY_AIRTEL_API_KEY = os.getenv('MOBILE_MONEY_AIRTEL_API_KEY', '')
     
+    # Stripe Payment Configuration
+    STRIPE_SECRET_KEY: str = os.environ.get('STRIPE_SECRET_KEY')
+    STRIPE_PUBLISHABLE_KEY: str = os.environ.get('STRIPE_PUBLISHABLE_KEY')
+    STRIPE_WEBHOOK_SECRET: str = os.environ.get('STRIPE_WEBHOOK_SECRET')
+    STRIPE_DEFAULT_CURRENCY = 'usd'
+    
+    # Frontend URL for payment redirects
+    FRONTEND_URL: str = os.environ.get('FRONTEND_URL', 'http://localhost:3000')
+    
     # Payment Limits
     MIN_ORDER_AMOUNT = 1000  # Minimum order amount in local currency
     MAX_ORDER_AMOUNT = 10000000  # Maximum order amount in local currency
@@ -87,6 +97,11 @@ class Config:
     CLOUDINARY_CLOUD_NAME = os.getenv('CLOUDINARY_CLOUD_NAME')
     CLOUDINARY_API_KEY = os.getenv('CLOUDINARY_API_KEY')
     CLOUDINARY_API_SECRET = os.getenv('CLOUDINARY_API_SECRET')
+    
+    # Currency Exchange Configuration
+    EXCHANGE_RATES_API_KEY: str = os.environ.get('EXCHANGE_RATES_API_KEY', 'cafa5ae74433d7e085197318c1889912')
+    DEFAULT_BASE_CURRENCY: str = 'GBP'
+    DEFAULT_TARGET_CURRENCY: str = 'USD'
     
 
 class DevelopmentConfig(Config):

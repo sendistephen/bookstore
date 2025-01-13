@@ -30,7 +30,7 @@ class OrderSchema(Schema):
     status = fields.Enum(
         OrderStatus, 
         by_value=True, 
-        required=True,  # Make status required
+        required=False,  # Make status optional
         validate=[
             validate.OneOf(
                 [status.value for status in OrderStatus], 
